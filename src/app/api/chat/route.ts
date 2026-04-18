@@ -109,6 +109,14 @@ PERSONALITY:
     }
   }
 
+  // Farm Operations Team
+  if (farmSchema.teamWorkers && farmSchema.teamWorkers.length > 0) {
+    sections.push('', 'FARM OPERATIONS TEAM:');
+    for (const w of farmSchema.teamWorkers) {
+      sections.push(`  - ${w.name} (${w.role}) | Email: ${w.email}`);
+    }
+  }
+
   // Intervention guidelines (real-world vertical farm practices)
   sections.push(
     '', 'INTERVENTION GUIDELINES:',
@@ -258,6 +266,29 @@ const TOOLS = [
       required: [] as string[],
     }
   },
+  {
+    type: "function" as const,
+    name: "issue_work_order",
+    description: "Issue a manual work order to a human team member. Use this when a condition cannot be fixed via digital actuators (e.g., harvesting, applying physical spray for mold/fungus, repairing a broken pipe). Select an appropriate worker from the 'FARM OPERATIONS TEAM' list based on their role.",
+    parameters: {
+      type: "object",
+      properties: {
+        workerEmail: {
+          type: "string",
+          description: "The email address of the team member to assign this work order to.",
+        },
+        type: {
+          type: "string",
+          description: "The type of work order (e.g., 'Fungicide Application', 'Harvesting', 'Maintenance', 'Inspection').",
+        },
+        description: {
+          type: "string",
+          description: "Detailed instructions of what the worker needs to do.",
+        },
+      },
+      required: ["workerEmail", "type", "description"],
+    }
+  },
 ];
 
 /* ── Tool Execution ── */
@@ -387,6 +418,35 @@ async function executeTool(toolName: string, args: any, baseUrl: string, farmSch
           note: 'Frontend will capture the schematic and provide it as an image in the next message. The image shows the live state of sensor positions, flow animations, zone health colors, and actuator states.',
         });
       }
+      case 'issue_work_order': {
+        // Find the worker
+        const worker = farmSchema?.teamWorkers?.find((w: any) => w.email === args.workerEmail);
+        if (!worker) {
+          return JSON.stringify({ error: `Worker with email ${args.workerEmail} not found. Please verify from the FARM OPERATIONS TEAM list.` });
+        }
+        
+        try {
+          // Send SES Email
+          const { sendWorkOrderEmail } = await import('@/lib/aws/ses');
+          // For logging/tracking in the digital twin: WO ID
+          const mockId = `WO-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+          const success = await sendWorkOrderEmail(args.workerEmail, worker.name, mockId, args.description);
+          
+          if (!success) throw new Error('SES Gateway failed');
+          
+          return JSON.stringify({
+            executed: true,
+            workOrder: {
+              type: args.type,
+              description: args.description,
+              assignedTo: worker.name
+            },
+            note: 'Work Order sent successfully to the human technician via email.',
+          });
+        } catch (e: any) {
+          return JSON.stringify({ error: `Failed to dispatch email: ${e.message}` });
+        }
+      }
       default:
         return JSON.stringify({ error: `Unknown tool: ${toolName}` });
     }
@@ -433,6 +493,7 @@ export async function POST(req: Request) {
 
     let finalText = '';
     const actuatorCommands: any[] = [];
+    const issuedWorkOrders: any[] = [];
     let captureRequested = false;
 
     // Multi-step tool loop (max 6 iterations)
@@ -482,6 +543,14 @@ export async function POST(req: Request) {
             // Collect side-effect signals
             if (fc.name === 'control_actuator') actuatorCommands.push(args);
             if (fc.name === 'capture_schematic') captureRequested = true;
+            if (fc.name === 'issue_work_order') {
+              try {
+                const parsedResult = JSON.parse(result);
+                if (parsedResult.executed && parsedResult.workOrder) {
+                  issuedWorkOrders.push(parsedResult.workOrder);
+                }
+              } catch (e) {}
+            }
 
             return { call_id: fc.call_id, output: result };
           })
@@ -524,6 +593,8 @@ export async function POST(req: Request) {
       ],
       // Actuator commands Uma issued during this conversation turn
       actuatorCommands: actuatorCommands.length > 0 ? actuatorCommands : undefined,
+      // Work orders issued
+      issuedWorkOrders: issuedWorkOrders.length > 0 ? issuedWorkOrders : undefined,
       // Whether Uma requested a fresh schematic capture
       captureRequested: captureRequested || undefined,
     });

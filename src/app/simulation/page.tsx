@@ -9,11 +9,12 @@ import AmbientStrip from './components/AmbientStrip';
 import HumidityZoneCard from './components/HumidityZoneCard';
 import DiseasePanel from './components/DiseasePanel';
 import ActivityLog from './components/ActivityLog';
+import TeamPanel from './components/TeamPanel';
+import WorkOrdersPanel from './components/WorkOrdersPanel';
 import './simulation.css';
 
 export default function Simulation() {
   return (
-    <SimulationProvider>
       <div className="sim-container">
         {/* ═══ HEADER ═══ */}
         <div className="sim-header animate-in">
@@ -32,8 +33,10 @@ export default function Simulation() {
           {/* ═══ FARM SCHEMATIC ═══ */}
           <FarmSchematic />
 
-          {/* ═══ ACTIVITY LOG ═══ */}
-          <ActivityLog />
+          {/* ═══ SIDEBAR: ACTIVITY LOG ═══ */}
+          <div className="sim-sidebar" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <ActivityLog />
+          </div>
         </div>
 
         {/* ═══ AMBIENT ENVIRONMENT ═══ */}
@@ -58,6 +61,5 @@ export default function Simulation() {
         {/* ═══ CROP HEALTH & DISEASE SIMULATION ═══ */}
         <DiseasePanel />
       </div>
-    </SimulationProvider>
   );
 }

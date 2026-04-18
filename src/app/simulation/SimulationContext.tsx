@@ -1,14 +1,14 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useRef, useCallback, type ReactNode } from 'react';
-import { generateSpeechUrl } from '@/lib/ai';
+import { generateSpeechUrl } from '../../lib/ai';
 import {
   RESERVOIR_EQ, AMBIENT_EQ, TOWER_CROPS, CASCADE_RULES, HUMIDITY_ZONES_DEF,
   RESERVOIR_META, AMBIENT_META,
   getReservoirStatus, getAmbientStatus,
   type ReservoirKey, type AmbientKey, type RowZone, type LogEntry,
   type Bottleneck, type ActiveIntervention, type TowerCondition, type Disease,
-  type HumidityZone,
+  type HumidityZone, type TeamWorker, type WorkOrder,
 } from './types';
 
 /* ═══════════════════════════════════════════
@@ -42,6 +42,13 @@ interface SimulationContextType {
   selectedTower: string;
   setSelectedTower: (id: string) => void;
   injectDisease: (towerId: string, disease: Disease) => void;
+
+  // Team & Work Orders
+  teamWorkers: TeamWorker[];
+  workOrders: WorkOrder[];
+  addWorker: (worker: TeamWorker) => void;
+  issueWorkOrder: (order: Omit<WorkOrder, 'id' | 'createdAt'>) => void;
+  completeWorkOrder: (id: string) => void;
 
   // Perturbation
   perturbReservoir: (key: ReservoirKey, value: number, label: string) => void;
@@ -124,7 +131,12 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
   const [towerConditions, setTowerConditions] = useState<TowerCondition[]>(
     TOWER_CROPS.map(t => ({ towerId: t.id, disease: null, injectedAt: null }))
   );
-  const [selectedTower, setSelectedTower] = useState('T1');
+  const [selectedTower, setSelectedTower] = useState<string>('T1');
+
+  /* ── Team & Work Orders State ── */
+  // Auto-init with the user's requesting email for testing mock if needed, or leave empty
+  const [teamWorkers, setTeamWorkers] = useState<TeamWorker[]>([]);
+  const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
 
   /* ── Refs ── */
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -138,12 +150,16 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
   humidityZonesRef.current = humidityZones;
   const towerConditionsRef = useRef(towerConditions);
   towerConditionsRef.current = towerConditions;
+  const teamWorkersRef = useRef(teamWorkers);
+  teamWorkersRef.current = teamWorkers;
   
   // Buffered Monitoring Refs
   const pendingSpikesRef = useRef<{sensor: string, label: string}[]>([]);
   const monitorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const umaStateRef = useRef(umaState);
   umaStateRef.current = umaState;
+  const umaActiveRef = useRef(umaActive);
+  umaActiveRef.current = umaActive;
 
   useEffect(() => {
     audioRef.current = new Audio();
@@ -201,6 +217,8 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
             symptoms: tc.disease.symptoms,
           } : null,
         })),
+      // Team Workers tracking
+      teamWorkers: teamWorkersRef.current,
       // Overrides (e.g., the value that was just spiked)
       ...overrides,
     };
@@ -211,6 +229,7 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
     const iv = setInterval(() => setTick(t => t + 1), 500);
     return () => clearInterval(iv);
   }, []);
+
 
   /* ═══ AMBIENT JITTER + PER-ROW MICROCLIMATE ═══ */
   useEffect(() => {
@@ -573,6 +592,18 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
           }
         }
       }
+
+      // Process Issued Work Orders
+      if (umaResponse.issuedWorkOrders && Array.isArray(umaResponse.issuedWorkOrders)) {
+        for (const wo of umaResponse.issuedWorkOrders) {
+          issueWorkOrder({
+            type: wo.type,
+            description: wo.description,
+            assignedTo: wo.assignedTo,
+            status: 'open'
+          });
+        }
+      }
       
       setActiveInterventions(prev => [...prev, ...newInterventions]);
       setMonitoringRecovery(true);
@@ -628,6 +659,40 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       
     }, 5000);
   }, [umaActive, buildFullSnapshot, callUmaMonitor, addLog]);
+
+  /* ═══ TEAM & WORK ORDER FUNCTIONS ═══ */
+
+  const addWorker = useCallback((worker: TeamWorker) => {
+    setTeamWorkers(prev => [...prev, worker]);
+  }, []);
+
+  const issueWorkOrder = useCallback((order: Omit<WorkOrder, 'id' | 'createdAt'>) => {
+    const newOrder: WorkOrder = {
+      ...order,
+      id: `WO-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+      createdAt: Date.now(),
+    };
+    setWorkOrders(prev => [newOrder, ...prev]);
+    addLog(`🎟 Work Order issued: ${order.type}`, 'warning');
+  }, [addLog]);
+
+  const completeWorkOrder = useCallback((id: string) => {
+    setWorkOrders(prev => prev.map(o => o.id === id ? { ...o, status: 'completed' } : o));
+    addLog(`✅ Work Order ${id} completed by field technician`, 'success');
+    
+    // Clear the disease condition so the UI fades back to healthy plant visual
+    setTowerConditions(prev => prev.map(tc => {
+      if (tc.disease) {
+        addLog(`Condition ${tc.disease.name} manually resolved.`, 'info');
+      }
+      return { ...tc, disease: null, injectedAt: null };
+    }));
+
+    // Trigger Uma to review the resolution
+    if (umaActiveRef.current) {
+      queueAnomalyForUma('resolution', `Work order ${id} has been fully completed by the technician. Please review the updated sensor array to confirm biological conditions are restored and announce the situation is under control.`);
+    }
+  }, [addLog, queueAnomalyForUma]);
 
   /* ═══ PERTURBATION FUNCTIONS ═══ */
 
@@ -742,6 +807,7 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
     umaActive, umaState, toggleUma, voiceEnabled, setVoiceEnabled,
     logs, bottlenecks, cascadeActive, activeInterventions,
     towerConditions, selectedTower, setSelectedTower, injectDisease,
+    teamWorkers, workOrders, addWorker, issueWorkOrder, completeWorkOrder,
     perturbReservoir, perturbAmbient, perturbRow,
     toggleRowValve, toggleZoneHumidifier, toggleZoneDehumidifier,
     buildFullSnapshot,

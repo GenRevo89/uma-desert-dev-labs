@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from 'react';
 import { Activity, TriangleAlert } from 'lucide-react';
 import { useSimulation } from '../SimulationContext';
 import {
@@ -17,6 +18,7 @@ import Chiller from './builder/Chiller';
 import ZipGrowTower from './builder/ZipGrowTower';
 import Manifold from './builder/Manifold';
 import ReturnDrain from './builder/ReturnDrain';
+import DiseaseAlertModal from './DiseaseAlertModal';
 
 export default function FarmSchematic() {
   const {

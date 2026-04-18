@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Activity, MessageSquare, LayoutGrid, Leaf, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Activity, MessageSquare, LayoutGrid, Leaf, PanelLeftClose, PanelLeftOpen, Users, ClipboardList } from 'lucide-react';
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -13,6 +13,8 @@ export function Sidebar() {
     { href: '/simulation', label: 'Digital Twin', icon: Activity, description: 'Live simulation' },
     { href: '/builder', label: 'Twin Builder', icon: LayoutGrid, description: 'Configure sensors' },
     { href: '/chat', label: 'Uma Chat', icon: MessageSquare, description: 'AI interface' },
+    { href: '/team', label: 'Team', icon: Users, description: 'Manage workers' },
+    { href: '/operations', label: 'Operations', icon: ClipboardList, description: 'Work orders' },
   ];
 
   return (

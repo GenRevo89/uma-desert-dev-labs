@@ -35,6 +35,13 @@ export interface FarmSchema {
     towerId: string;
     disease: { name: string; severity: string; symptoms: string } | null;
   }[];
+  /** Farm Operations Team */
+  teamWorkers?: {
+    id: string;
+    name: string;
+    role: string;
+    email: string;
+  }[];
   /** Base64 JPEG of the farm schematic SVG (captured from the simulation) */
   schematicImage?: string;
 }

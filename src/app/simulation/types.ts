@@ -22,6 +22,22 @@ export type Bottleneck = {
   message: string;
 };
 
+export type TeamWorker = {
+  id: string;
+  name: string;
+  role: 'Agronomist' | 'Technician' | 'Harvester' | 'Manager';
+  email: string;
+};
+
+export type WorkOrder = {
+  id: string;
+  type: string;
+  description: string;
+  assignedTo: string | null;
+  status: 'open' | 'completed';
+  createdAt: number;
+};
+
 export type ActiveIntervention = {
   sensor: string;
   actuator: string;

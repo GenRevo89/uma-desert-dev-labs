@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { Sidebar } from './components/Sidebar';
+import { Providers } from './Providers';
 
 export const metadata: Metadata = {
   title: 'Uma | Hydroponic Intelligence',
@@ -16,12 +17,14 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <div className="noise-overlay" />
-        <div className="layout-wrapper">
-          <Sidebar />
-          <main className="main-content">
-            {children}
-          </main>
-        </div>
+        <Providers>
+          <div className="layout-wrapper">
+            <Sidebar />
+            <main className="main-content">
+              {children}
+            </main>
+          </div>
+        </Providers>
       </body>
     </html>
   );
