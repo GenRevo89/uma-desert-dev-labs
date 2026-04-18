@@ -10,7 +10,11 @@ export default function ReservoirCard() {
   const keys: ReservoirKey[] = ['ph', 'ec', 'temp', 'do2', 'flow'];
 
   const spikeValues: Record<ReservoirKey, number> = {
-    ph: 8.5, ec: 3.9, temp: 34, do2: 3.0, flow: 0.5,
+    ph: 8.5, ec: 3.9, temp: 34, do2: 12.0, flow: 4.5,
+  };
+
+  const dropValues: Record<ReservoirKey, number> = {
+    ph: 4.0, ec: 0.2, temp: 15, do2: 3.0, flow: 0.5,
   };
 
   return (
@@ -55,17 +59,27 @@ export default function ReservoirCard() {
                 </span>
               </div>
               <div className="sensor-bar-track">
+                <div className="sensor-bar-optimal" style={{ 
+                  left: `${((meta.dangerLow - meta.min) / (meta.max - meta.min)) * 100}%`,
+                  width: `${((meta.dangerHigh - meta.dangerLow) / (meta.max - meta.min)) * 100}%` 
+                }} />
                 <div className="sensor-bar-fill" style={{
                   width: `${Math.min(100, Math.max(0, pct))}%`,
                   background: status === 'danger' ? 'var(--rose)' : status === 'warning' ? 'var(--amber)' : meta.color,
                 }} />
-                <div className="sensor-bar-eq" style={{ left: `${eqPct}%` }} />
               </div>
-              <button className="btn btn-secondary btn-sm sensor-spike" onClick={() => {
-                perturbReservoir(key, spikeValues[key], `${meta.label} spiked to ${spikeValues[key]} ${meta.unit}`);
-              }}>
-                <AlertTriangle size={11} /> Spike
-              </button>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button className="btn btn-secondary btn-sm sensor-spike" style={{ flex: 1 }} onClick={() => {
+                  perturbReservoir(key, spikeValues[key], `${meta.label} spiked up to ${spikeValues[key]} ${meta.unit}`);
+                }}>
+                  <AlertTriangle size={11} /> Spike
+                </button>
+                <button className="btn btn-secondary btn-sm sensor-spike" style={{ flex: 1 }} onClick={() => {
+                  perturbReservoir(key, dropValues[key], `${meta.label} dropped to ${dropValues[key]} ${meta.unit}`);
+                }}>
+                  <ArrowDown size={11} /> Drop
+                </button>
+              </div>
             </div>
           );
         })}

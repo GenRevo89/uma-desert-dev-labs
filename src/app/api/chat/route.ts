@@ -213,17 +213,17 @@ const TOOLS = [
       properties: {
         target: {
           type: "string",
-          description: "The actuator type: 'valve', 'zone_humidifier', or 'zone_dehumidifier'",
-          enum: ["valve", "zone_humidifier", "zone_dehumidifier"],
+          description: "The actuator type: 'valve', 'zone_humidifier', 'zone_dehumidifier', 'ph_doser', 'nutrient_doser', 'ro_valve', 'air_pump', 'circulation_pump', 'led_dimmer', or 'chiller'",
+          enum: ["valve", "zone_humidifier", "zone_dehumidifier", "ph_doser", "nutrient_doser", "ro_valve", "air_pump", "circulation_pump", "led_dimmer", "chiller"],
         },
         id: {
           type: "string",
-          description: "The target ID. For valves: tower ID (e.g., 'T1'). For zone actuators: zone ID (e.g., 'A' or 'B')",
+          description: "The target ID. For valves: tower ID (e.g., 'T1'). For zone actuators: zone ID (e.g., 'A' or 'B'). For system actuators: 'system'.",
         },
         action: {
           type: "string",
-          description: "The action to perform: 'on'/'off' for actuators, 'open'/'close' for valves",
-          enum: ["on", "off", "open", "close"],
+          description: "The action to perform: 'on', 'off', 'open', 'close', 'purge', 'dose_up', or 'dose_down'",
+          enum: ["on", "off", "open", "close", "purge", "dose_up", "dose_down"],
         },
         reason: {
           type: "string",

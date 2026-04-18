@@ -54,6 +54,9 @@ interface SimulationContextType {
   // Schema snapshot for Uma chat integration
   buildFullSnapshot: (overrides?: Record<string, any>) => any;
 
+  // NEW: System Actuators explicitly tracked for digital twin animations
+  systemActuators: Record<string, boolean>;
+
   // Tick
   tick: number;
 }
@@ -79,6 +82,16 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
 
   const [ambient, setAmbient] = useState<Record<AmbientKey, number>>({
     humidity: AMBIENT_EQ.humidity, light: AMBIENT_EQ.light,
+  });
+
+  const [systemActuators, setSystemActuators] = useState<Record<string, boolean>>({
+    ph_doser: false,
+    nutrient_doser: false,
+    ro_valve: false,
+    air_pump: true, // naturally on
+    circulation_pump: true, // naturally on
+    chiller: false,
+    led_dimmer: true, // naturally on
   });
 
   const [rowZones, setRowZones] = useState<RowZone[]>(
@@ -450,6 +463,40 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
     }
   }, [umaActive, addLog]);
 
+  /* ═══ ACTUATOR TOGGLES ═══ */
+  const toggleRowValve = useCallback((towerId: string, forceState?: boolean) => {
+    setRowZones(prev => prev.map(row => {
+      if (row.towerId !== towerId) return row;
+      const newState = forceState !== undefined ? forceState : !row.sensors.valveOpen;
+      if (row.sensors.valveOpen !== newState) {
+        addLog(`${towerId}: Feed valve ${newState ? 'OPENED' : 'CLOSED'}`, newState ? 'success' : 'warning');
+      }
+      return { ...row, sensors: { ...row.sensors, valveOpen: newState } };
+    }));
+  }, [addLog]);
+
+  const toggleZoneHumidifier = useCallback((zoneId: 'A' | 'B', forceState?: boolean) => {
+    setHumidityZones(prev => prev.map(z => {
+      if (z.id !== zoneId) return z;
+      const newState = forceState !== undefined ? forceState : !z.humidifierOn;
+      if (newState !== z.humidifierOn) {
+        addLog(`Humidity Zone ${zoneId}: Humidifier ${newState ? 'ON' : 'OFF'}`, newState ? 'success' : 'info');
+      }
+      return { ...z, humidifierOn: newState, dehumidifierOn: newState ? false : z.dehumidifierOn };
+    }));
+  }, [addLog]);
+
+  const toggleZoneDehumidifier = useCallback((zoneId: 'A' | 'B', forceState?: boolean) => {
+    setHumidityZones(prev => prev.map(z => {
+      if (z.id !== zoneId) return z;
+      const newState = forceState !== undefined ? forceState : !z.dehumidifierOn;
+      if (newState !== z.dehumidifierOn) {
+        addLog(`Humidity Zone ${zoneId}: Dehumidifier ${newState ? 'ON' : 'OFF'}`, newState ? 'success' : 'info');
+      }
+      return { ...z, dehumidifierOn: newState, humidifierOn: newState ? false : z.humidifierOn };
+    }));
+  }, [addLog]);
+
   /* ═══ UMA MONITORING CALL ═══ */
   const callUmaMonitor = useCallback(async (sensorSnapshot: any, trigger: string) => {
     if (!umaActive) return;
@@ -480,6 +527,53 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
           }
         }
       }
+      
+      // Execute Structural Actuator Commands
+      if (umaResponse.actuatorCommands && Array.isArray(umaResponse.actuatorCommands)) {
+        for (const cmd of umaResponse.actuatorCommands) {
+          if (cmd.target === 'valve') {
+             if (cmd.action === 'purge') {
+               toggleRowValve(cmd.id, false); // close valve
+               addLog(`Uma [Actuator]: Purging line ${cmd.id}...`, 'warning');
+               setTimeout(() => toggleRowValve(cmd.id, true), 3500); // reopen
+             } else {
+               toggleRowValve(cmd.id, cmd.action === 'open');
+             }
+          } else if (cmd.target === 'zone_humidifier') {
+             toggleZoneHumidifier(cmd.id as 'A'|'B', cmd.action === 'on');
+          } else if (cmd.target === 'zone_dehumidifier') {
+             toggleZoneDehumidifier(cmd.id as 'A'|'B', cmd.action === 'on');
+          } else if (cmd.target === 'ph_doser') {
+             setReservoir(prev => ({ ...prev, ph: prev.ph + (cmd.action === 'dose_down' ? -0.5 : 0.5) }));
+             setSystemActuators(prev => ({ ...prev, ph_doser: true }));
+             setTimeout(() => setSystemActuators(p => ({ ...p, ph_doser: false })), 3500);
+             addLog(`Uma [Actuator]: pH Doser ${cmd.action === 'dose_down' ? 'Down' : 'Up'} engaged`, 'success');
+          } else if (cmd.target === 'nutrient_doser') {
+             setReservoir(prev => ({ ...prev, ec: prev.ec + 0.3 }));
+             setSystemActuators(prev => ({ ...prev, nutrient_doser: true }));
+             setTimeout(() => setSystemActuators(p => ({ ...p, nutrient_doser: false })), 3500);
+             addLog('Uma [Actuator]: Nutrient Doser engaged', 'success');
+          } else if (cmd.target === 'ro_valve') {
+             setReservoir(prev => ({ ...prev, ec: prev.ec - 0.2, ph: prev.ph - 0.1 }));
+             addLog('Uma [Actuator]: RO Dilution Valve opened', 'success');
+          } else if (cmd.target === 'air_pump') {
+             setReservoir(prev => ({ ...prev, do2: prev.do2 + 1.2 }));
+             addLog('Uma [Actuator]: Air Pump On', 'success');
+          } else if (cmd.target === 'circulation_pump') {
+             setReservoir(prev => ({ ...prev, flow: prev.flow + 0.8 }));
+             addLog('Uma [Actuator]: Circulation Pump increased', 'success');
+          } else if (cmd.target === 'chiller') {
+             setReservoir(prev => ({ ...prev, temp: prev.temp - 2.5 }));
+             setSystemActuators(prev => ({ ...prev, chiller: true }));
+             setTimeout(() => setSystemActuators(p => ({ ...p, chiller: false })), 5000);
+             addLog('Uma [Actuator]: Chiller engaged', 'success');
+          } else if (cmd.target === 'led_dimmer') {
+             setAmbient(prev => ({ ...prev, light: prev.light + (cmd.action === 'dose_down' ? -50 : 50) }));
+             addLog('Uma [Actuator]: LED Dimmer adjusted', 'success');
+          }
+        }
+      }
+      
       setActiveInterventions(prev => [...prev, ...newInterventions]);
       setMonitoringRecovery(true);
       addLog('Uma: Monitoring recovery. Will notify when equilibrium is restored.', 'info');
@@ -501,7 +595,7 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       addLog('Uma: Monitoring API unavailable. Falling back to baseline correction.', 'warning');
       setUmaState('idle');
     }
-  }, [umaActive, voiceEnabled, addLog]);
+  }, [umaActive, voiceEnabled, addLog, toggleRowValve, toggleZoneHumidifier, toggleZoneDehumidifier]);
 
   /* ═══ UMA ANOMALY BUFFERING ═══ */
   const queueAnomalyForUma = useCallback((sensorKey: string, triggerLabel: string) => {
@@ -604,34 +698,6 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
     const snapshot = buildFullSnapshot({ [`${towerId}_${type}`]: value });
     await callUmaMonitor(snapshot, `${crop.crop} (${towerId}): ${typeLabel} at ${value.toFixed(type === 'rh' ? 0 : 1)}`);
   }, [addLog, callUmaMonitor, buildFullSnapshot]);
-
-  const toggleRowValve = useCallback((towerId: string) => {
-    setRowZones(prev => prev.map(row => {
-      if (row.towerId !== towerId) return row;
-      const newState = !row.sensors.valveOpen;
-      addLog(`${towerId}: Feed valve ${newState ? 'OPENED' : 'CLOSED'}`, newState ? 'success' : 'warning');
-      return { ...row, sensors: { ...row.sensors, valveOpen: newState } };
-    }));
-  }, [addLog]);
-
-  const toggleZoneHumidifier = useCallback((zoneId: 'A' | 'B') => {
-    setHumidityZones(prev => prev.map(z => {
-      if (z.id !== zoneId) return z;
-      const newState = !z.humidifierOn;
-      addLog(`Humidity Zone ${zoneId}: Humidifier ${newState ? 'ON' : 'OFF'}`, newState ? 'success' : 'info');
-      return { ...z, humidifierOn: newState, dehumidifierOn: newState ? false : z.dehumidifierOn };
-    }));
-  }, [addLog]);
-
-  const toggleZoneDehumidifier = useCallback((zoneId: 'A' | 'B') => {
-    setHumidityZones(prev => prev.map(z => {
-      if (z.id !== zoneId) return z;
-      const newState = !z.dehumidifierOn;
-      addLog(`Humidity Zone ${zoneId}: Dehumidifier ${newState ? 'ON' : 'OFF'}`, newState ? 'success' : 'info');
-      return { ...z, dehumidifierOn: newState, humidifierOn: newState ? false : z.humidifierOn };
-    }));
-  }, [addLog]);
-
   /* ═══ DISEASE INJECTION ═══ */
   const injectDisease = useCallback(async (towerId: string, disease: Disease) => {
     const crop = TOWER_CROPS.find(t => t.id === towerId);
@@ -672,7 +738,7 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
 
   /* ═══ CONTEXT VALUE ═══ */
   const value: SimulationContextType = {
-    reservoir, ambient, rowZones, humidityZones,
+    reservoir, ambient, rowZones, humidityZones, systemActuators,
     umaActive, umaState, toggleUma, voiceEnabled, setVoiceEnabled,
     logs, bottlenecks, cascadeActive, activeInterventions,
     towerConditions, selectedTower, setSelectedTower, injectDisease,

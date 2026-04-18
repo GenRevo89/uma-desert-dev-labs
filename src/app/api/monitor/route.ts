@@ -83,7 +83,7 @@ Respond with a JSON object:
     { "sensor": "ph|ec|temp|do2|flow|humidity|light|T1_ph|T2_ec|zoneA_rh|...", "target": 6.0, "actuator": "Name of actuator engaged", "detail": "What you're doing" }
   ],
   "actuatorCommands": [
-    { "target": "valve|zone_humidifier|zone_dehumidifier", "id": "T1|T2|...|A|B", "action": "open|close|on|off|purge" }
+    { "target": "valve|zone_humidifier|zone_dehumidifier|ph_doser|nutrient_doser|ro_valve|air_pump|circulation_pump|led_dimmer|chiller", "id": "T1|A|B|system", "action": "open|close|on|off|purge|dose_up|dose_down" }
   ],
   "narration": "A natural spoken sentence for voice output (what you'd say out loud to the farm operator)"
 }`;
