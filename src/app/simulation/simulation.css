@@ -1,0 +1,703 @@
+/* ══════════════════════════════════════════════
+   SIMULATION — Digital Twin
+   ══════════════════════════════════════════════ */
+
+.sim-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 1300px;
+}
+
+/* ── Header ── */
+.sim-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.sim-header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+  padding-top: 4px;
+}
+
+.voice-active {
+  color: var(--accent) !important;
+  background: var(--accent-subtle) !important;
+}
+
+/* ══════════════════════════════════════
+   UMA POWER TOGGLE — The Badass Switch
+   ══════════════════════════════════════ */
+.uma-toggle-wrap {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  cursor: pointer;
+  padding: 6px 16px 6px 6px;
+  border-radius: var(--radius-full);
+  background: var(--surface-1);
+  border: 1px solid var(--border-default);
+  transition: all var(--transition-base);
+  user-select: none;
+}
+
+.uma-toggle-wrap:hover {
+  border-color: var(--border-emphasis);
+  background: var(--surface-2);
+}
+
+.uma-toggle-wrap.active {
+  background: rgba(34, 197, 94, 0.06);
+  border-color: rgba(34, 197, 94, 0.25);
+  box-shadow: 0 0 30px rgba(34, 197, 94, 0.1), inset 0 0 20px rgba(34, 197, 94, 0.03);
+}
+
+.uma-toggle-track {
+  position: relative;
+  width: 52px;
+  height: 28px;
+  border-radius: 14px;
+  background: var(--surface-3);
+  border: 1px solid var(--border-default);
+  transition: all var(--transition-base);
+  overflow: hidden;
+}
+
+.uma-toggle-wrap.active .uma-toggle-track {
+  background: linear-gradient(135deg, var(--accent) 0%, #059669 100%);
+  border-color: var(--accent);
+  box-shadow: 0 0 16px var(--accent-glow);
+}
+
+.uma-toggle-glow {
+  position: absolute;
+  inset: 0;
+  border-radius: 14px;
+  opacity: 0;
+  background: radial-gradient(circle at 14px 14px, rgba(255,255,255,0.3), transparent 60%);
+  transition: all var(--transition-base);
+}
+
+.uma-toggle-wrap.active .uma-toggle-glow {
+  opacity: 1;
+  background: radial-gradient(circle at 38px 14px, rgba(255,255,255,0.25), transparent 60%);
+}
+
+.uma-toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--bg-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.uma-toggle-wrap.active .uma-toggle-thumb {
+  left: 26px;
+  color: var(--accent);
+  background: #000;
+  box-shadow: 0 0 12px rgba(34, 197, 94, 0.3), 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.uma-toggle-label {
+  display: flex;
+  flex-direction: column;
+}
+
+.uma-toggle-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.uma-toggle-status {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.uma-toggle-status.off {
+  color: var(--text-tertiary);
+}
+
+.uma-toggle-status.on {
+  color: var(--accent);
+}
+
+/* ══════════════════════════════════════
+   FARM SCHEMATIC
+   ══════════════════════════════════════ */
+.schematic {
+  padding: 0;
+  overflow: hidden;
+}
+
+.schematic-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.schematic-header h3 {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.cascade-badge {
+  animation: cascadePulse 1s ease-in-out infinite;
+}
+
+@keyframes cascadePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.schematic-body {
+  position: relative;
+  height: 420px;
+  background:
+    radial-gradient(ellipse at 50% 120%, rgba(34, 197, 94, 0.03) 0%, transparent 50%),
+    linear-gradient(180deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+  overflow: hidden;
+}
+
+/* ── SVG Flow Animations ── */
+.flow-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.flow-anim-h {
+  animation: flowH 5s linear infinite;
+}
+
+.flow-anim-h-rev {
+  animation: flowH 5s linear infinite reverse;
+}
+
+.flow-anim-v {
+  animation: flowV 4s linear infinite;
+}
+
+@keyframes flowH {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+@keyframes flowV {
+  0% { transform: translateY(-30%); opacity: 0.3; }
+  50% { opacity: 0.6; }
+  100% { transform: translateY(30%); opacity: 0.3; }
+}
+
+.flow-anim-v-up {
+  animation: flowVUp 3s linear infinite;
+}
+
+@keyframes flowVUp {
+  0% { transform: translateY(30%); opacity: 0.2; }
+  50% { opacity: 0.5; }
+  100% { transform: translateY(-30%); opacity: 0.2; }
+}
+
+.reservoir-water {
+  transition: height 1.5s ease, y 1.5s ease;
+}
+
+.air-particle {
+  animation: airFloat 6s ease-in-out infinite;
+}
+
+@keyframes airFloat {
+  0%, 100% { transform: translateY(0); opacity: 0.2; }
+  50% { transform: translateY(-20px); opacity: 0.5; }
+}
+
+.sensor-alarm-ring {
+  animation: alarmRing 0.8s ease-in-out infinite;
+}
+
+@keyframes alarmRing {
+  0%, 100% { r: 22; opacity: 0.3; }
+  50% { r: 26; opacity: 0.1; }
+}
+
+.bottleneck-ring {
+  animation: bottleneckSpin 3s linear infinite;
+}
+
+@keyframes bottleneckSpin {
+  to { stroke-dashoffset: -24; }
+}
+
+/* Uma SVG orb */
+.uma-svg-orb .uma-ring-1 {
+  animation: orbPulse 4s ease-in-out infinite;
+}
+
+.uma-svg-orb .uma-ring-2 {
+  animation: orbPulse 3s ease-in-out infinite reverse;
+}
+
+@keyframes orbPulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.uma-svg-orb.analyzing .uma-ring-1,
+.uma-svg-orb.analyzing .uma-ring-2 {
+  stroke: var(--amber) !important;
+  animation-duration: 0.8s;
+}
+
+.uma-svg-orb.correcting .uma-ring-1,
+.uma-svg-orb.correcting .uma-ring-2 {
+  stroke: var(--cyan) !important;
+  animation-duration: 1.2s;
+}
+
+.uma-svg-orb.speaking .uma-ring-1,
+.uma-svg-orb.speaking .uma-ring-2 {
+  stroke: var(--accent-bright) !important;
+  animation-duration: 0.5s;
+}
+
+/* ══════════════════════════════════════
+   SENSOR TELEMETRY GRID
+   ══════════════════════════════════════ */
+.sensor-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(165px, 1fr));
+  gap: 12px;
+}
+
+.sensor-card {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  position: relative;
+  overflow: hidden;
+  transition: all var(--transition-base);
+}
+
+.sensor-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 3px;
+  height: 100%;
+  background: var(--accent);
+  opacity: 0.4;
+  transition: all var(--transition-base);
+}
+
+.sensor-card.warning::before { background: var(--amber); opacity: 1; }
+.sensor-card.danger::before { background: var(--rose); opacity: 1; box-shadow: 0 0 12px rgba(244, 63, 94, 0.3); }
+
+.sensor-card.has-bottleneck {
+  border-color: rgba(244, 63, 94, 0.3);
+  box-shadow: 0 0 20px rgba(244, 63, 94, 0.08);
+}
+
+.sensor-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sensor-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.sensor-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.sensor-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sensor-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.sensor-dot.nominal { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+.sensor-dot.warning { background: var(--amber); box-shadow: 0 0 6px var(--amber); animation: statusPulse 1s ease-in-out infinite; }
+.sensor-dot.danger { background: var(--rose); box-shadow: 0 0 8px var(--rose); animation: statusPulse 0.5s ease-in-out infinite; }
+
+@keyframes statusPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.sensor-reading {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.sensor-val {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  line-height: 1;
+}
+
+.sensor-unit {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-weight: 500;
+}
+
+.sensor-delta {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.sensor-delta.up { color: var(--rose); }
+.sensor-delta.down { color: var(--cyan); }
+
+/* Sensor bar */
+.sensor-bar-track {
+  width: 100%;
+  height: 3px;
+  background: var(--surface-2);
+  border-radius: 2px;
+  position: relative;
+}
+
+.sensor-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.8s ease, background 0.5s ease;
+}
+
+.sensor-bar-eq {
+  position: absolute;
+  top: -4px;
+  width: 2px;
+  height: 11px;
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 1px;
+  transform: translateX(-50%);
+}
+
+.sensor-spike {
+  align-self: flex-start;
+  margin-top: 2px;
+}
+
+/* ══════════════════════════════════════
+   ACTIVITY LOG
+   ══════════════════════════════════════ */
+.sim-log {
+  padding: 0;
+  overflow: hidden;
+}
+
+.log-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.log-head h3 {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.log-list {
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 6px 12px;
+}
+
+.log-empty {
+  padding: 24px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+
+.log-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  animation: fadeIn 0.3s ease both;
+  transition: background var(--transition-fast);
+}
+
+.log-row:hover {
+  background: var(--surface-1);
+}
+
+.log-ts {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+  width: 60px;
+}
+
+.log-pip {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.log-pip.info { background: var(--text-tertiary); }
+.log-pip.success { background: var(--accent); }
+.log-pip.warning { background: var(--amber); }
+.log-pip.danger { background: var(--rose); }
+
+.log-msg {
+  color: var(--text-secondary);
+  flex: 1;
+  line-height: 1.4;
+}
+
+.log-row.danger .log-msg { color: var(--rose); }
+.log-row.success .log-msg { color: var(--accent); }
+.log-row.warning .log-msg { color: var(--amber); }
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ══════════════════════════════════════
+   INTERVENTION ANNOTATIONS
+   ══════════════════════════════════════ */
+.intervention-annotation {
+  animation: annotationFadeIn 0.6s ease both;
+}
+
+@keyframes annotationFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.intervention-pulse {
+  animation: interventionPulse 2s ease-in-out infinite;
+}
+
+@keyframes interventionPulse {
+  0%, 100% {
+    r: 22;
+    opacity: 0.4;
+    stroke: #22c55e;
+  }
+  50% {
+    r: 26;
+    opacity: 0.15;
+    stroke: #4ade80;
+  }
+}
+
+/* Recovery monitoring state indicator */
+.log-row.info .log-msg {
+  font-style: normal;
+}
+
+.log-row.info:has(.log-msg:first-child) {
+  border-left: 2px solid transparent;
+}
+
+/* ══════════════════════════════════════
+   CROP HEALTH & DISEASE PANEL
+   ══════════════════════════════════════ */
+.disease-panel {
+  padding: 0;
+  overflow: hidden;
+}
+
+.disease-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.disease-header h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.disease-body {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Tower selector */
+.tower-selector {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tower-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--surface-1);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-full);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.tower-chip:hover {
+  background: var(--surface-2);
+  border-color: var(--border-emphasis);
+}
+
+.tower-chip.active {
+  background: var(--accent-subtle);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.tower-chip.diseased {
+  border-color: var(--rose);
+}
+
+.tower-chip.diseased.active {
+  background: var(--rose-subtle);
+  border-color: var(--rose);
+  color: var(--rose);
+}
+
+.tower-chip-emoji {
+  font-size: 14px;
+}
+
+.tower-chip-label {
+  white-space: nowrap;
+}
+
+.tower-chip-alert {
+  font-size: 10px;
+  color: var(--rose);
+}
+
+/* Disease cards grid */
+.disease-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+}
+
+.disease-card {
+  padding: 12px 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  border-left: 3px solid transparent;
+  position: relative;
+}
+
+.disease-card:hover {
+  border-color: var(--border-emphasis);
+  transform: translateY(-1px);
+}
+
+.disease-card.moderate { border-left-color: var(--cyan); }
+.disease-card.severe { border-left-color: var(--amber); }
+.disease-card.critical { border-left-color: var(--rose); }
+
+.disease-card.active {
+  background: rgba(244, 63, 94, 0.06);
+  border-color: rgba(244, 63, 94, 0.25);
+  box-shadow: 0 0 16px rgba(244, 63, 94, 0.06);
+}
+
+.disease-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.disease-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.disease-desc {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.disease-active-tag {
+  margin-top: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--rose);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
