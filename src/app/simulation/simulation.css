@@ -6,7 +6,7 @@
   display: flex;
   flex-direction: column;
   gap: 20px;
-  max-width: 1300px;
+  max-width: 1400px;
 }
 
 /* ── Header ── */
@@ -15,6 +15,14 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 24px;
+}
+
+/* ── Main Layout: Schematic + Log Side-by-Side ── */
+.sim-main-stage {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 20px;
+  align-items: start;
 }
 
 .sim-header-right {
@@ -170,7 +178,7 @@
 
 .schematic-body {
   position: relative;
-  height: 420px;
+  height: 580px;
   background:
     radial-gradient(ellipse at 50% 120%, rgba(34, 197, 94, 0.03) 0%, transparent 50%),
     linear-gradient(180deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
@@ -279,25 +287,39 @@
 }
 
 /* ══════════════════════════════════════
-   SENSOR TELEMETRY GRID
+   AMBIENT ENVIRONMENT STRIP
    ══════════════════════════════════════ */
-.sensor-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(165px, 1fr));
-  gap: 12px;
+.ambient-strip {
+  padding: 16px 20px;
 }
 
-.sensor-card {
-  padding: 14px 16px;
+.ambient-strip-title {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 600;
+  margin-bottom: 14px;
+}
+
+.ambient-sensors {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.ambient-sensor-item {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
+  padding: 12px 14px;
+  background: var(--surface-0);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
   position: relative;
   overflow: hidden;
   transition: all var(--transition-base);
 }
 
-.sensor-card::before {
+.ambient-sensor-item::before {
   content: '';
   position: absolute;
   top: 0;
@@ -309,20 +331,545 @@
   transition: all var(--transition-base);
 }
 
-.sensor-card.warning::before { background: var(--amber); opacity: 1; }
-.sensor-card.danger::before { background: var(--rose); opacity: 1; box-shadow: 0 0 12px rgba(244, 63, 94, 0.3); }
+.ambient-sensor-item.warning::before { background: var(--amber); opacity: 1; }
+.ambient-sensor-item.danger::before { background: var(--rose); opacity: 1; box-shadow: 0 0 12px rgba(244, 63, 94, 0.3); }
 
-.sensor-card.has-bottleneck {
-  border-color: rgba(244, 63, 94, 0.3);
-  box-shadow: 0 0 20px rgba(244, 63, 94, 0.08);
-}
-
-.sensor-top {
+.ambient-sensor-top {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
+.ambient-sensor-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ambient-sensor-reading {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+/* ══════════════════════════════════════
+   RESERVOIR CONTROL CARD
+   ══════════════════════════════════════ */
+.reservoir-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.reservoir-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.reservoir-card-header h3 {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.reservoir-badges {
+  display: flex;
+  gap: 8px;
+}
+
+.reservoir-sensors {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0;
+}
+
+.reservoir-sensor-item {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+  overflow: hidden;
+  transition: all var(--transition-base);
+  border-right: 1px solid var(--border-subtle);
+}
+
+.reservoir-sensor-item:last-child {
+  border-right: none;
+}
+
+.reservoir-sensor-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: var(--accent);
+  opacity: 0.4;
+  transition: all var(--transition-base);
+}
+
+.reservoir-sensor-item.warning::before { background: var(--amber); opacity: 1; }
+.reservoir-sensor-item.danger::before { background: var(--rose); opacity: 1; box-shadow: 0 0 12px rgba(244, 63, 94, 0.3); }
+
+.reservoir-sensor-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.reservoir-sensor-reading {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+/* ══════════════════════════════════════
+   PER-ROW CONTROL CARDS GRID
+   ══════════════════════════════════════ */
+.row-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 1200px) {
+  .row-cards-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .row-cards-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .reservoir-sensors {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .reservoir-sensor-item:nth-child(3) {
+    border-right: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .row-cards-grid {
+    grid-template-columns: 1fr;
+  }
+  .reservoir-sensors {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ── Individual Row Card ── */
+.row-card {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  transition: all var(--transition-base);
+}
+
+.row-card:hover {
+  border-color: var(--border-emphasis);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.row-card-health-stripe {
+  height: 3px;
+  width: 100%;
+  transition: background 0.5s ease;
+}
+
+.row-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px 8px;
+}
+
+.row-card-emoji {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.row-card-title {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.row-card-id {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.row-card-crop {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.row-card-disease-badge {
+  font-size: 16px;
+  animation: statusPulse 1s ease-in-out infinite;
+}
+
+.row-card.diseased {
+  border-color: rgba(244, 63, 94, 0.2);
+  box-shadow: 0 0 16px rgba(244, 63, 94, 0.06);
+}
+
+/* ── Row Sensor Block ── */
+.row-sensor-block {
+  padding: 8px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  border-top: 1px solid var(--border-subtle);
+  position: relative;
+}
+
+.row-sensor-block::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 2px;
+  height: 100%;
+  background: var(--accent);
+  opacity: 0;
+  transition: all var(--transition-base);
+}
+
+.row-sensor-block.warning::before { opacity: 1; background: var(--amber); }
+.row-sensor-block.danger::before { opacity: 1; background: var(--rose); box-shadow: 0 0 8px rgba(244, 63, 94, 0.3); }
+
+.row-sensor-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+
+.row-sensor-label .sensor-dot {
+  width: 6px;
+  height: 6px;
+  margin-left: auto;
+}
+
+.row-sensor-reading {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.row-sensor-val {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  line-height: 1;
+  color: var(--text-primary);
+}
+
+.row-sensor-range {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  margin-left: auto;
+}
+
+/* ── Row Actuator Controls ── */
+.row-actuators {
+  border-top: 1px solid var(--border-subtle);
+  padding: 6px 14px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.row-actuator-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.row-valve-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+
+.row-valve-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-default);
+  background: var(--surface-1);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.row-valve-btn:hover {
+  background: var(--surface-2);
+}
+
+.row-valve-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  transition: all var(--transition-fast);
+}
+
+.row-valve-btn.open {
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.row-valve-btn.open .row-valve-dot {
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
+}
+
+.row-valve-btn.closed {
+  border-color: rgba(244, 63, 94, 0.3);
+  color: var(--rose);
+}
+
+.row-valve-btn.closed .row-valve-dot {
+  background: var(--rose);
+  box-shadow: 0 0 6px var(--rose);
+}
+
+/* ── Row Zone Status (humidity zone indicators) ── */
+.row-zone-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0 0;
+}
+
+.zone-actuator-pip {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--surface-3);
+  transition: all var(--transition-fast);
+}
+
+.zone-actuator-pip.active {
+  background: var(--violet);
+  box-shadow: 0 0 6px var(--violet);
+}
+
+.zone-actuator-pip.active.dehumid {
+  background: var(--cyan);
+  box-shadow: 0 0 6px var(--cyan);
+}
+
+/* ══════════════════════════════════════
+   HUMIDITY ZONE CARDS
+   ══════════════════════════════════════ */
+.hz-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+@media (max-width: 768px) {
+  .hz-cards-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.hz-card {
+  padding: 0;
+  overflow: hidden;
+  position: relative;
+  transition: all var(--transition-base);
+  border-left: 3px solid rgba(139, 92, 246, 0.3);
+}
+
+.hz-card:nth-child(2) {
+  border-left-color: rgba(34, 211, 238, 0.3);
+}
+
+.hz-card:hover {
+  border-color: var(--border-emphasis);
+  border-left-color: rgba(139, 92, 246, 0.6);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg), 0 0 20px rgba(139, 92, 246, 0.06);
+}
+
+.hz-card:nth-child(2):hover {
+  border-left-color: rgba(34, 211, 238, 0.6);
+  box-shadow: var(--shadow-lg), 0 0 20px rgba(34, 211, 238, 0.06);
+}
+
+.hz-card-stripe {
+  height: 3px;
+  width: 100%;
+  transition: background 0.5s ease;
+}
+
+.hz-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 18px 10px;
+}
+
+.hz-card-title {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.hz-card-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.hz-card-rows {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+/* Readings */
+.hz-readings {
+  padding: 8px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.hz-row-reading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 0;
+}
+
+.hz-row-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  width: 54px;
+}
+
+.hz-row-val {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+}
+
+.hz-row-target {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-left: auto;
+  font-weight: 500;
+}
+
+/* Average */
+.hz-avg {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 18px;
+  background: rgba(139, 92, 246, 0.04);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.hz-card:nth-child(2) .hz-avg {
+  background: rgba(34, 211, 238, 0.04);
+}
+
+.hz-avg-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.hz-avg-val {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+/* Zone Actuator Buttons */
+.hz-actuators {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 12px 18px 16px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.hz-actuator-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--surface-1);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.hz-actuator-btn:hover {
+  background: var(--surface-2);
+  border-color: var(--border-emphasis);
+  color: var(--text-primary);
+}
+
+.hz-actuator-btn.active.humidify {
+  background: rgba(139, 92, 246, 0.15);
+  border-color: rgba(139, 92, 246, 0.5);
+  color: #a78bfa;
+  box-shadow: 0 0 16px rgba(139, 92, 246, 0.15), inset 0 0 12px rgba(139, 92, 246, 0.05);
+}
+
+.hz-actuator-btn.active.dehumidify {
+  background: rgba(34, 211, 238, 0.15);
+  border-color: rgba(34, 211, 238, 0.5);
+  color: #67e8f9;
+  box-shadow: 0 0 16px rgba(34, 211, 238, 0.15), inset 0 0 12px rgba(34, 211, 238, 0.05);
+}
+
+/* ══════════════════════════════════════
+   SENSOR TELEMETRY SHARED STYLES
+   ══════════════════════════════════════ */
 .sensor-icon {
   width: 30px;
   height: 30px;
@@ -331,11 +878,6 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-}
-
-.sensor-info {
-  flex: 1;
-  min-width: 0;
 }
 
 .sensor-name {
@@ -361,12 +903,6 @@
 @keyframes statusPulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
-}
-
-.sensor-reading {
-  display: flex;
-  align-items: baseline;
-  gap: 4px;
 }
 
 .sensor-val {
@@ -449,7 +985,7 @@
 }
 
 .log-list {
-  max-height: 220px;
+  max-height: 420px;
   overflow-y: auto;
   padding: 6px 12px;
 }

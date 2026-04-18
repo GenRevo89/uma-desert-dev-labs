@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-const VOICE_ID = '21m00Tcm4TlvDq8ikWAM'; // Rachel (or fallback standard)
+const VOICE_ID = 'EXAVITQu4vr4xnSDxMaL'; // Bella (Dynamic, fluid, clear voice)
 
 export async function POST(req: Request) {
   try {
@@ -15,10 +15,10 @@ export async function POST(req: Request) {
       },
       body: JSON.stringify({
         text: `... ${text}`,
-        model_id: 'eleven_monolingual_v1',
+        model_id: 'eleven_multilingual_v2',
         voice_settings: {
           stability: 0.5,
-          similarity_boost: 0.5,
+          similarity_boost: 0.75,
         },
       }),
     });

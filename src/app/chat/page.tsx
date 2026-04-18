@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { generateChatResponse, generateSpeechUrl } from '@/lib/ai';
+import { generateChatResponse, generateSpeechUrl, type FarmSchema } from '@/lib/ai';
 import { 
   Send, Volume2, VolumeX, Leaf, User, Sparkles,
   Loader2, Mic, Database
@@ -15,7 +15,17 @@ type Message = {
   timestamp: string;
 };
 
-export default function Chat() {
+interface ChatProps {
+  /** Optional digital twin schema — when loaded, Uma gets full schematic awareness */
+  farmSchema?: FarmSchema;
+  /** Optional callback for actuator commands Uma issues via chat */
+  onActuatorCommand?: (cmd: { target: string; id: string; action: string; reason: string }) => void;
+  /** Optional callback to capture a fresh schematic screenshot, returns base64 JPEG */
+  onCaptureSchematic?: () => Promise<string | null>;
+}
+
+export default function Chat({ farmSchema, onActuatorCommand, onCaptureSchematic }: ChatProps = {}) {
+  const baselineImage = useRef<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'welcome',
@@ -35,6 +45,16 @@ export default function Chat() {
   function now() {
     return new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
   }
+
+  // Capture baseline schematic image on mount (after short delay for rendering)
+  useEffect(() => {
+    if (!onCaptureSchematic) return;
+    const timer = setTimeout(async () => {
+      const img = await onCaptureSchematic();
+      if (img) baselineImage.current = img;
+    }, 1500); // Wait for schematic to render
+    return () => clearTimeout(timer);
+  }, [onCaptureSchematic]);
 
   // Auto-scroll on new messages
   useEffect(() => {
@@ -65,11 +85,32 @@ export default function Chat() {
     setLoading(true);
 
     try {
+      // Attach pre-captured baseline schematic image to the schema
+      const schemaWithImage = farmSchema && baselineImage.current
+        ? { ...farmSchema, schematicImage: baselineImage.current }
+        : farmSchema;
+
       const gptRes = await generateChatResponse(
-        newMsgs.map(m => ({ role: m.role, content: m.content }))
+        newMsgs.map(m => ({ role: m.role, content: m.content })),
+        schemaWithImage,
       );
       
       const reply = gptRes?.choices?.[0]?.message?.content || 'I wasn\'t able to process that request. Please try again.';
+
+      // Execute any actuator commands Uma issued
+      if (gptRes?.actuatorCommands && onActuatorCommand) {
+        for (const cmd of gptRes.actuatorCommands) {
+          onActuatorCommand(cmd);
+        }
+      }
+
+      // Handle schematic capture requests from Uma — refresh the baseline
+      if (gptRes?.captureRequested && onCaptureSchematic) {
+        const freshImg = await onCaptureSchematic();
+        if (freshImg) {
+          baselineImage.current = freshImg;
+        }
+      }
       
       const assistantMsg: Message = {
         id: `uma-${Date.now()}`,
@@ -106,7 +147,7 @@ export default function Chat() {
       setLoading(false);
       inputRef.current?.focus();
     }
-  }, [input, loading, messages, voiceEnabled]);
+  }, [input, loading, messages, voiceEnabled, farmSchema, onActuatorCommand, onCaptureSchematic]);
 
   const suggestions = [
     'What sensors are currently active on the farm?',

@@ -280,6 +280,11 @@ body::after {
   border-right: 1px solid var(--border-subtle);
   position: relative;
   z-index: 10;
+  transition: width var(--transition-base);
+}
+
+.sidebar.collapsed {
+  width: 80px;
 }
 
 .sidebar::after {
@@ -298,6 +303,35 @@ body::after {
   align-items: center;
   gap: 14px;
   border-bottom: 1px solid var(--border-subtle);
+  position: relative;
+}
+
+.sidebar-toggle {
+  position: absolute;
+  right: -16px;
+  top: 36px;
+  width: 32px;
+  height: 32px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  cursor: pointer;
+  z-index: 20;
+  transition: all var(--transition-fast);
+}
+
+.sidebar-toggle:hover {
+  background: var(--surface-2);
+  color: var(--text-primary);
+  border-color: var(--border-default);
+}
+
+.sidebar.collapsed .sidebar-header {
+  padding: 28px 16px;
 }
 
 .sidebar-logo {
@@ -330,6 +364,14 @@ body::after {
 .sidebar-brand {
   display: flex;
   flex-direction: column;
+  transition: opacity var(--transition-fast);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.sidebar.collapsed .sidebar-brand {
+  opacity: 0;
+  width: 0;
 }
 
 .sidebar-brand-name {
@@ -365,6 +407,14 @@ body::after {
   text-transform: uppercase;
   color: var(--text-tertiary);
   padding: 16px 12px 8px;
+  transition: opacity var(--transition-fast);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.sidebar.collapsed .sidebar-section-label {
+  opacity: 0;
+  padding: 16px 0 8px;
 }
 
 .nav-link {
@@ -378,6 +428,22 @@ body::after {
   font-weight: 500;
   transition: all var(--transition-base);
   position: relative;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.sidebar.collapsed .nav-link {
+  padding: 10px;
+  justify-content: center;
+}
+
+.nav-link-text {
+  transition: opacity var(--transition-fast);
+}
+
+.sidebar.collapsed .nav-link-text {
+  opacity: 0;
+  width: 0;
 }
 
 .nav-link:hover {
@@ -428,6 +494,14 @@ body::after {
   background: var(--surface-1);
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-subtle);
+  transition: all var(--transition-base);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.sidebar.collapsed .sidebar-status {
+  padding: 12px 0;
+  justify-content: center;
 }
 
 .status-dot {
@@ -437,6 +511,7 @@ body::after {
   background: var(--accent);
   box-shadow: 0 0 6px var(--accent);
   animation: statusPulse 3s ease-in-out infinite;
+  flex-shrink: 0;
 }
 
 @keyframes statusPulse {
@@ -447,6 +522,12 @@ body::after {
 .status-text {
   font-size: 12px;
   color: var(--text-secondary);
+  transition: opacity var(--transition-fast);
+}
+
+.sidebar.collapsed .status-text {
+  opacity: 0;
+  width: 0;
 }
 
 .status-text strong {

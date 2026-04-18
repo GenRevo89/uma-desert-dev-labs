@@ -1,11 +1,13 @@
 "use client";
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Activity, MessageSquare, LayoutGrid, Leaf, Radio } from 'lucide-react';
+import { Activity, MessageSquare, LayoutGrid, Leaf, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 
 export function Sidebar() {
   const pathname = usePathname();
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   const navItems = [
     { href: '/simulation', label: 'Digital Twin', icon: Activity, description: 'Live simulation' },
@@ -14,7 +16,7 @@ export function Sidebar() {
   ];
 
   return (
-    <nav className="sidebar">
+    <nav className={`sidebar ${isCollapsed ? 'collapsed' : ''}`}>
       {/* ── Brand Header ── */}
       <div className="sidebar-header">
         <div className="sidebar-logo">
@@ -22,8 +24,15 @@ export function Sidebar() {
         </div>
         <div className="sidebar-brand">
           <span className="sidebar-brand-name">Uma</span>
-          <span className="sidebar-brand-tag">Hydroponic Intelligence</span>
+          <span className="sidebar-brand-tag">Hydroponic</span>
         </div>
+        <button 
+          className="sidebar-toggle btn-icon btn-ghost" 
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          {isCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+        </button>
       </div>
 
       {/* ── Navigation ── */}
@@ -37,9 +46,10 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               className={`nav-link ${isActive ? 'active' : ''}`}
+              title={isCollapsed ? item.label : undefined}
             >
               <Icon size={18} className="nav-link-icon" />
-              <span>{item.label}</span>
+              <span className="nav-link-text">{item.label}</span>
             </Link>
           );
         })}
@@ -51,7 +61,7 @@ export function Sidebar() {
           <div className="status-dot" />
           <div className="status-text">
             <strong>System Online</strong>
-            Uma v1.0 · GPT-5.4-mini
+            {!isCollapsed && <span>Uma v1.0 · GPT-5.4-mini</span>}
           </div>
         </div>
       </div>
