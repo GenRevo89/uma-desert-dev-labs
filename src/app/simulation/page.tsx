@@ -14,9 +14,10 @@ import DiseasePanel from './components/DiseasePanel';
 import ActivityLog from './components/ActivityLog';
 import TeamPanel from './components/TeamPanel';
 import WorkOrdersPanel from './components/WorkOrdersPanel';
+import { Suspense } from 'react';
 import './simulation.css';
 
-export default function Simulation() {
+function SimulationInner() {
   const searchParams = useSearchParams();
   const projectId = searchParams.get('project_id');
   
@@ -144,5 +145,13 @@ export default function Simulation() {
           <DiseasePanel />
         )}
       </div>
+  );
+}
+
+export default function Simulation() {
+  return (
+    <Suspense fallback={<div className="sim-container"><div className="sim-header p-8">Loading Simulation...</div></div>}>
+      <SimulationInner />
+    </Suspense>
   );
 }
