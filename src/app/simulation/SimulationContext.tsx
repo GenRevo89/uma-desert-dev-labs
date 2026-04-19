@@ -233,7 +233,24 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
 
         // 2. Refresh Work Orders seamlessly
         if (data?.getWorkOrders) {
-           setWorkOrders(data.getWorkOrders.map((o: any) => ({ ...o, id: o.workOrderId || o.id, createdAt: !isNaN(Number(o.createdAt)) ? Number(o.createdAt) : new Date(o.createdAt).getTime() })));
+           const parsedOrders = data.getWorkOrders.map((o: any) => ({ ...o, id: o.workOrderId || o.id, createdAt: !isNaN(Number(o.createdAt)) ? Number(o.createdAt) : new Date(o.createdAt).getTime() }));
+
+           setWorkOrders(prev => {
+             // Find newly verified orders that weren't verified before
+             const newlyVerified = parsedOrders.filter((n: any) => 
+               n.status === 'verified' && 
+               !prev.find(p => p.id === n.id && p.status === 'verified')
+             );
+
+             for (const nv of newlyVerified) {
+               if (nv.towerId) {
+                  setTowerConditions(prevT => prevT.map(t => t.towerId === nv.towerId ? { ...t, disease: null, injectedAt: null } : t));
+                  addLog(`Uma [Crop Control]: Restoring visual state of ${nv.towerId} automatically upon WO verification`, 'success');
+               }
+             }
+
+             return parsedOrders;
+           });
         }
 
       } catch (e) {

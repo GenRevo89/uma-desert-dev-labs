@@ -8,9 +8,25 @@ import './operations.css';
 export default function OperationsPage() {
   const { workOrders } = useSimulation();
   
-  const [countdown, setCountdown] = useState(60 - new Date().getSeconds());
+  const [isMounted, setIsMounted] = useState(false);
+  const [countdown, setCountdown] = useState(0);
+  
   useEffect(() => {
-    const iv = setInterval(() => setCountdown(60 - new Date().getSeconds()), 1000);
+    setIsMounted(true);
+    
+    const tick = () => {
+      const s = new Date().getSeconds();
+      const remaining = s === 0 ? 0 : 60 - s;
+      setCountdown(remaining);
+      
+      // Top-of-minute: Fire local backend CRON to simulate Vercel (* * * * *) trigger
+      if (s === 0) {
+        fetch('/api/cron', { method: 'POST', body: JSON.stringify({}) }).catch(() => null);
+      }
+    };
+
+    tick();
+    const iv = setInterval(tick, 1000);
     return () => clearInterval(iv);
   }, []);
 
@@ -29,7 +45,7 @@ export default function OperationsPage() {
         <div className="ops-tabs">
           <div className="ops-tab" style={{ background: 'rgba(34,211,238,0.1)', color: 'var(--accent)', border: '1px solid rgba(34,211,238,0.2)' }}>
             <Activity className="inline mr-2" size={14} />
-            Next System Check: 00:{countdown.toString().padStart(2, '0')}
+            Next System Check: {isMounted ? `00:${countdown.toString().padStart(2, '0')}` : '--:--'}
           </div>
           <div className="ops-tab active">All</div>
           <div className="ops-tab">

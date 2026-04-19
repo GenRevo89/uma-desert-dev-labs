@@ -38,9 +38,15 @@ export default function Chat({ farmSchema, onActuatorCommand, onCaptureSchematic
   const [loading, setLoading] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [hasSpeechRecognition, setHasSpeechRecognition] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
 
   function now() {
     return new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
@@ -63,10 +69,224 @@ export default function Chat({ farmSchema, onActuatorCommand, onCaptureSchematic
     }
   }, [messages, loading]);
 
-  // Focus input on mount
   useEffect(() => {
     inputRef.current?.focus();
+    // Assume capability available
+    if (typeof window !== 'undefined' && navigator.mediaDevices) {
+      setHasSpeechRecognition(true);
+    }
   }, []);
+
+  const nextPlayTimeRef = useRef<number>(0);
+  const outputAudioCtxRef = useRef<AudioContext | null>(null);
+
+  const startRealtimeRecording = async () => {
+    try {
+      if (wsRef.current?.readyState === WebSocket.OPEN) return;
+
+      const res = await fetch('/api/realtime/init', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ farmSchema })
+      });
+      const { url, key, systemPrompt, tools } = await res.json();
+      if (!url || !key) throw new Error('Realtime endpoint missing');
+
+      const wsUrl = `${url}&api-key=${key}`;
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      outputAudioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+      nextPlayTimeRef.current = outputAudioCtxRef.current.currentTime;
+
+      ws.onopen = () => {
+        ws.send(JSON.stringify({
+          type: 'session.update',
+          session: {
+            instructions: systemPrompt,
+            tools: tools,
+            modalities: ["audio", "text"],
+            input_audio_transcription: { model: 'whisper-1' },
+            turn_detection: { type: "server_vad" }
+          }
+        }));
+        setIsListening(true);
+        setMessages(prev => [...prev, {
+          id: `system-${Date.now()}`, role: 'assistant',
+          content: '— Live Audio Link Established (\'server_vad\' active) —',
+          timestamp: now()
+        }]);
+      };
+
+      ws.onmessage = async (e) => {
+        const msg = JSON.parse(e.data);
+        
+        // 1. User Transcription Finished
+        if (msg.type === "conversation.item.input_audio_transcription.completed") {
+          setMessages(prev => [...prev, {
+             id: `user-${Date.now()}`,
+             role: 'user',
+             content: msg.transcript || '[Unintelligible]',
+             timestamp: now()
+          }]);
+        }
+
+        // 2. Assistant Audio Transcript Streaming
+        if (msg.type === "response.audio_transcript.delta") {
+          setMessages(prev => {
+             const last = prev[prev.length - 1];
+             if (last && last.id === `uma-live`) {
+                return [...prev.slice(0, -1), { ...last, content: last.content + msg.delta }];
+             }
+             return [...prev, { id: 'uma-live', role: 'assistant', content: msg.delta, timestamp: now() }];
+          });
+        }
+
+        // 3. Audio Streaming (Base64 -> PCM16 -> Float32)
+        if (msg.type === "response.audio.delta") {
+            const binaryString = atob(msg.delta);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+            const int16 = new Int16Array(bytes.buffer);
+            const float32 = new Float32Array(int16.length);
+            for (let i = 0; i < int16.length; i++) float32[i] = int16[i] / 32768.0;
+
+            if (!outputAudioCtxRef.current) return;
+            const audioBuffer = outputAudioCtxRef.current.createBuffer(1, float32.length, 24000);
+            audioBuffer.getChannelData(0).set(float32);
+            
+            const source = outputAudioCtxRef.current.createBufferSource();
+            source.buffer = audioBuffer;
+            source.connect(outputAudioCtxRef.current.destination);
+            
+            const startTime = Math.max(outputAudioCtxRef.current.currentTime, nextPlayTimeRef.current);
+            source.start(startTime);
+            nextPlayTimeRef.current = startTime + audioBuffer.duration;
+        }
+
+        // 4. Client-side Tool Interception
+        if (msg.type === "response.function_call_arguments.done") {
+           const { name, arguments: args, call_id } = msg;
+           let parsedArgs = {};
+           try { parsedArgs = JSON.parse(args); } catch(x){}
+
+           const toolRes = await fetch('/api/realtime/execute', { 
+               method: 'POST',
+               headers: { 'Content-Type': 'application/json' },
+               body: JSON.stringify({ toolName: name, args: parsedArgs, farmSchema })
+           });
+           const { result } = await toolRes.json();
+           
+           try {
+              const resObj = JSON.parse(result);
+              if (resObj.command && onActuatorCommand) {
+                 onActuatorCommand(resObj.command);
+              }
+              if (resObj.capture_requested && onCaptureSchematic) {
+                 const freshImg = await onCaptureSchematic();
+                 if (freshImg) baselineImage.current = freshImg;
+              }
+           } catch(err) { /* Not a JSON result */ }
+
+           if(ws.readyState === WebSocket.OPEN) {
+               ws.send(JSON.stringify({
+                  type: "conversation.item.create",
+                  item: {
+                     type: "function_call_output",
+                     call_id: call_id,
+                     output: result
+                  }
+               }));
+               ws.send(JSON.stringify({ type: "response.create" }));
+           }
+        }
+
+        // 5. Cleanup temporary message ID
+        if (msg.type === "response.done") {
+          setMessages(prev => {
+             const last = prev[prev.length - 1];
+             if (last && last.id === 'uma-live') {
+                return [...prev.slice(0, -1), { ...last, id: `uma-${Date.now()}` }];
+             }
+             return prev;
+          });
+        }
+      };
+
+      ws.onerror = () => stopRealtimeRecording();
+      ws.onclose = () => setIsListening(false);
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+      audioContextRef.current = audioCtx;
+
+      const source = audioCtx.createMediaStreamSource(stream);
+      const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+      processorRef.current = processor;
+
+      processor.onaudioprocess = (e) => {
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        const inputData = e.inputBuffer.getChannelData(0);
+        const pcm16 = new Int16Array(inputData.length);
+        for (let i = 0; i < inputData.length; i++) {
+          let s = Math.max(-1, Math.min(1, inputData[i]));
+          pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+        
+        const uint8 = new Uint8Array(pcm16.buffer);
+        let binary = '';
+        const chunkSize = 8192;
+        for (let i = 0; i < uint8.byteLength; i += chunkSize) {
+            binary += String.fromCharCode.apply(null, Array.from(uint8.subarray(i, i + chunkSize)));
+        }
+        const b64 = btoa(binary);
+
+        ws.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: b64 }));
+      };
+
+      source.connect(processor);
+      processor.connect(audioCtx.destination);
+    } catch (e: any) {
+      console.warn('Realtime connection failed:', e);
+      setIsListening(false);
+      setMessages(prev => [...prev, {
+        id: `system-${Date.now()}`, role: 'assistant',
+        content: 'Failed to connect to Azure Realtime WS endpoint. Check credentials.',
+        timestamp: now()
+      }]);
+    }
+  };
+
+  const stopRealtimeRecording = () => {
+    setIsListening(false);
+    if (processorRef.current) {
+      processorRef.current.disconnect();
+      processorRef.current = null;
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(()=>{});
+      audioContextRef.current = null;
+    }
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach(track => track.stop());
+      mediaStreamRef.current = null;
+    }
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+    if (outputAudioCtxRef.current) {
+      outputAudioCtxRef.current.close().catch(()=>{});
+      outputAudioCtxRef.current = null;
+    }
+  };
+
+  const toggleListening = () => {
+    if (isListening) stopRealtimeRecording();
+    else startRealtimeRecording();
+  };
 
   const sendMessage = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -272,6 +492,17 @@ export default function Chat({ farmSchema, onActuatorCommand, onCaptureSchematic
               className="chat-input"
               disabled={loading}
             />
+            {hasSpeechRecognition && (
+              <button
+                type="button"
+                className={`btn btn-ghost btn-icon chat-mic ${isListening ? 'listening' : ''}`}
+                onClick={toggleListening}
+                disabled={loading}
+                title={isListening ? 'Stop listening' : 'Start listening'}
+              >
+                <Mic size={16} className={isListening ? 'pulse' : ''} />
+              </button>
+            )}
             <button
               type="submit"
               className={`btn btn-primary btn-icon chat-send ${!input.trim() ? 'disabled' : ''}`}
