@@ -1,12 +1,18 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSimulation } from '../simulation/SimulationContext';
-import { ClipboardList, ShieldAlert, CheckCircle2, Clock, MapPin, Tag, Users } from 'lucide-react';
+import { ClipboardList, ShieldAlert, CheckCircle2, Clock, MapPin, Tag, Users, Activity } from 'lucide-react';
 import './operations.css';
 
 export default function OperationsPage() {
   const { workOrders } = useSimulation();
+  
+  const [countdown, setCountdown] = useState(60 - new Date().getSeconds());
+  useEffect(() => {
+    const iv = setInterval(() => setCountdown(60 - new Date().getSeconds()), 1000);
+    return () => clearInterval(iv);
+  }, []);
 
   return (
     <div className="ops-page-container">
@@ -21,6 +27,10 @@ export default function OperationsPage() {
           <p className="ops-subtitle">Track biological anomalies, structural failures, and Uma's dispatched task requests.</p>
         </div>
         <div className="ops-tabs">
+          <div className="ops-tab" style={{ background: 'rgba(34,211,238,0.1)', color: 'var(--accent)', border: '1px solid rgba(34,211,238,0.2)' }}>
+            <Activity className="inline mr-2" size={14} />
+            Next System Check: 00:{countdown.toString().padStart(2, '0')}
+          </div>
           <div className="ops-tab active">All</div>
           <div className="ops-tab">
             Pending 
@@ -60,6 +70,24 @@ export default function OperationsPage() {
           <div>
             <div className="ops-stat-label">Completed</div>
             <div className="ops-stat-value">{workOrders.filter(o => o.status === 'completed').length}</div>
+          </div>
+        </div>
+        <div className="ops-stat-card">
+          <div className="ops-stat-icon verified">
+            <Activity size={24} />
+          </div>
+          <div>
+            <div className="ops-stat-label">Verified by Uma</div>
+            <div className="ops-stat-value">{workOrders.filter(o => o.status === 'verified').length}</div>
+          </div>
+        </div>
+        <div className="ops-stat-card">
+          <div className="ops-stat-icon rose">
+            <ShieldAlert size={24} />
+          </div>
+          <div>
+            <div className="ops-stat-label">Escalated by Uma</div>
+            <div className="ops-stat-value">{workOrders.filter(o => o.status === 'escalated').length}</div>
           </div>
         </div>
       </div>
@@ -111,14 +139,32 @@ export default function OperationsPage() {
                       <span>Zone: Farm Floor</span>
                     </div>
                   </div>
+
+                  {o.status === 'open' && (
+                   <div className="wo-alert-box mt-5">
+                      Dispatch email sent via AWS SES. Awaiting field technician completion ping from mobile terminal.
+                   </div>
+                  )}
+                  {o.reviewed && (
+                    <div className="wo-review-box-container mt-5" style={{ background: o.status === 'verified' ? 'rgba(34, 197, 94, 0.05)' : 'rgba(244, 63, 94, 0.05)', borderRadius: '12px', padding: '16px', border: o.status === 'verified' ? '1px solid rgba(34,197,94,0.1)' : '1px solid rgba(244,63,94,0.1)' }}>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
+                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: o.status === 'verified' ? '#22c55e' : '#f43f5e', boxShadow: o.status === 'verified' ? '0 0 10px #22c55e' : '0 0 10px #f43f5e' }} />
+                        <span style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '1px', color: o.status === 'verified' ? '#22c55e' : '#f43f5e', textTransform: 'uppercase' }}>
+                          Uma AI Diagnostic: {o.status}
+                        </span>
+                      </div>
+                      <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.7)', lineHeight: '1.5', margin: 0 }}>
+                        {o.reviewResult || 'Verification complete.'}
+                      </p>
+                      <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px dashed rgba(255,255,255,0.1)' }}>
+                        <span style={{ fontSize: '11px', fontWeight: 600, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Field Worker Notes: </span>
+                        <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.85)' }}>{o.workerNotes || o.resolution || 'No notes documented.'}</span>
+                      </div>
+                    </div>
+                  )}
+
                 </div>
               </div>
-
-              {o.status === 'open' && (
-               <div className="wo-alert-box">
-                  Dispatch email sent via AWS SES. Awaiting field technician completion ping from mobile terminal.
-               </div>
-              )}
             </div>
           ))}
         </div>

@@ -5,7 +5,7 @@ import { useSimulation } from '../SimulationContext';
 import { TOWER_CROPS, DISEASE_CATALOG } from '../types';
 
 export default function DiseasePanel() {
-  const { towerConditions, selectedTower, setSelectedTower, injectDisease } = useSimulation();
+  const { towerConditions, selectedTower, setSelectedTower, injectDisease, rowZones } = useSimulation();
 
   return (
     <div className="disease-panel glass-panel animate-in animate-in-delay-2">
@@ -16,17 +16,17 @@ export default function DiseasePanel() {
       <div className="disease-body">
         {/* Tower selector */}
         <div className="tower-selector">
-          {TOWER_CROPS.map(t => {
-            const condition = towerConditions.find(tc => tc.towerId === t.id);
+          {rowZones.map(row => {
+            const condition = towerConditions.find(tc => tc.towerId === row.towerId);
             const hasDisease = !!condition?.disease;
             return (
               <button
-                key={t.id}
-                className={`tower-chip ${selectedTower === t.id ? 'active' : ''} ${hasDisease ? 'diseased' : ''}`}
-                onClick={() => setSelectedTower(t.id)}
+                key={row.towerId}
+                className={`tower-chip ${selectedTower === row.towerId ? 'active' : ''} ${hasDisease ? 'diseased' : ''}`}
+                onClick={() => setSelectedTower(row.towerId)}
               >
-                <span className="tower-chip-emoji">{t.emoji}</span>
-                <span className="tower-chip-label">{t.id} · {t.crop}</span>
+                <span className="tower-chip-emoji">{row.emoji}</span>
+                <span className="tower-chip-label">{row.towerId} · {row.crop}</span>
                 {hasDisease && <span className="tower-chip-alert">⚠</span>}
               </button>
             );

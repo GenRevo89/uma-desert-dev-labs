@@ -1,0 +1,233 @@
+.dev-page-container {
+  padding: 40px 48px;
+  height: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.dev-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 40px;
+}
+
+.dev-title {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  letter-spacing: -0.5px;
+}
+
+.dev-subtitle {
+  color: var(--text-secondary);
+  margin-top: 8px;
+  font-size: 15px;
+}
+
+/* Beautiful Glassmorphic Buttons */
+.dev-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  border: none;
+  font-family: inherit;
+}
+
+.dev-btn-primary {
+  background: var(--cyan);
+  color: #000;
+  box-shadow: 0 0 16px rgba(34, 211, 238, 0.4);
+}
+
+.dev-btn-primary:hover {
+  background: #fff;
+  color: #000;
+  box-shadow: 0 0 24px rgba(34, 211, 238, 0.8);
+  transform: translateY(-1px);
+}
+
+.dev-btn-secondary {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.dev-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Radar Scan Loader */
+.dev-scan-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.radar-container {
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  border: 2px solid rgba(34, 211, 238, 0.2);
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 0 40px rgba(34, 211, 238, 0.1);
+}
+
+.radar-grid {
+  position: absolute;
+  inset: 0;
+  background-image: 
+    linear-gradient(rgba(34, 211, 238, 0.2) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34, 211, 238, 0.2) 1px, transparent 1px);
+  background-size: 40px 40px;
+  border-radius: 50%;
+}
+
+.radar-sweep {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100px;
+  height: 100px;
+  background: conic-gradient(from 0deg, transparent 70deg, rgba(34, 211, 238, 0.8) 90deg);
+  transform-origin: 0% 0%;
+  animation: sweep 2s linear infinite;
+  border-radius: 0 100% 0 0;
+}
+
+@keyframes sweep {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.dev-scan-text {
+  margin-top: 32px;
+  font-family: 'Orbitron', monospace;
+  font-weight: 700;
+  color: var(--cyan);
+  font-size: 18px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+/* Device Grid */
+.dev-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 20px;
+}
+
+.dev-card {
+  background: var(--surface-2);
+  border: 1px solid var(--border-emphasis);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+  transition: all var(--transition-base);
+}
+
+.dev-card:hover {
+  background: var(--surface-3);
+  border-color: rgba(34, 211, 238, 0.3);
+}
+
+.dev-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.dev-icon-wrap {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dev-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: rgba(34, 197, 94, 0.1);
+  color: var(--emerald);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+}
+
+.dev-status .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--emerald);
+  box-shadow: 0 0 8px var(--emerald);
+}
+
+.dev-id {
+  font-family: 'Orbitron', monospace;
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.dev-type {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.dev-meta-block {
+  background: var(--surface-1);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  margin-top: 16px;
+}
+
+.dev-meta-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+.dev-meta-row:last-child {
+  margin-bottom: 0;
+}
+
+.dev-meta-label {
+  color: var(--text-secondary);
+}
+
+.dev-meta-value {
+  color: var(--text-primary);
+  font-family: monospace;
+}

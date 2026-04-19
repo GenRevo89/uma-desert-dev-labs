@@ -34,8 +34,12 @@ export type WorkOrder = {
   type: string;
   description: string;
   assignedTo: string | null;
-  status: 'open' | 'completed';
+  status: 'open' | 'completed' | 'verified' | 'escalated';
   createdAt: number;
+  reviewed?: boolean;
+  reviewResult?: string | null;
+  workerNotes?: string | null;
+  resolution?: string | null;
 };
 
 export type ActiveIntervention = {

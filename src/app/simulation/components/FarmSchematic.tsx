@@ -177,12 +177,24 @@ export default function FarmSchematic() {
 
           {/* ═══ SUPPLY MANIFOLD ═══ */}
           <Manifold 
-            x={128} y={15}
-            towerPositions={towerXPositions} 
-            valveStates={rowZones.map((r: any) => r.sensors.valveOpen)}
+            x={128} y={15} w={770} h={15}
+            orientation="horizontal"
+            numInputs={1} numOutputs={5}
             fluidColor={fluidColor} 
             label="SUPPLY MANIFOLD" 
           />
+          {towerXPositions.map((wx, i) => {
+            const outSpacing = 770 / 6;
+            const manifoldOutX = 128 + outSpacing * (i + 1);
+            const isOpen = rowZones[i]?.sensors?.valveOpen !== false;
+            return (
+              <g key={`manifold-drop-${i}`}>
+                <path d={`M ${manifoldOutX} 30 L ${manifoldOutX} 45 L ${wx} 45 L ${wx} 62`} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
+                <path d={`M ${manifoldOutX} 30 L ${manifoldOutX} 45 L ${wx} 45 L ${wx} 62`} fill="none" stroke={fluidColor} strokeWidth="3" opacity={isOpen ? 0.7 : 0.15} strokeLinecap="round" strokeLinejoin="round" />
+                {isOpen && <path d={`M ${manifoldOutX} 30 L ${manifoldOutX} 45 L ${wx} 45 L ${wx} 62`} fill="none" stroke="rgba(255,255,255,0.8)" strokeWidth="1.5" strokeDasharray="4 6" className="flow-anim-h" strokeLinecap="round" strokeLinejoin="round" />}
+              </g>
+            );
+          })}
 
           {/* ═══ HVAC + CLIMATE CONTROL (right side) ═══ */}
           <text x="1050" y="100" textAnchor="middle" fill="rgba(255,255,255,0.45)" fontSize="7" fontWeight="600">CLIMATE</text>

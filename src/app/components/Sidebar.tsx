@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Activity, MessageSquare, LayoutGrid, Leaf, PanelLeftClose, PanelLeftOpen, Users, ClipboardList, Settings } from 'lucide-react';
+import { Activity, MessageSquare, LayoutGrid, Leaf, PanelLeftClose, PanelLeftOpen, Users, ClipboardList, Settings, Server } from 'lucide-react';
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -18,6 +18,7 @@ export function Sidebar() {
     { href: '/chat', label: 'Uma Chat', icon: MessageSquare, description: 'AI interface' },
     { href: '/team', label: 'Team', icon: Users, description: 'Manage workers' },
     { href: '/operations', label: 'Operations', icon: ClipboardList, description: 'Work orders' },
+    { href: '/devices', label: 'Devices', icon: Server, description: 'Network mapping' },
     { href: '/settings', label: 'Settings', icon: Settings, description: 'System config' },
   ];
 
@@ -25,12 +26,12 @@ export function Sidebar() {
     <nav className={`sidebar ${isCollapsed ? 'collapsed' : ''}`}>
       {/* ── Brand Header ── */}
       <div className="sidebar-header">
-        <div className="sidebar-logo">
-          <Leaf size={20} color="#000" strokeWidth={2.5} />
+        <div className="sidebar-logo p-0 overflow-hidden border border-[var(--border-subtle)] bg-black" style={{ width: '32px', height: '32px', borderRadius: '10px', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }}>
+          <img src="/uma-logo.png" alt="Uma Logo" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '10px' }} />
         </div>
         <div className="sidebar-brand">
-          <span className="sidebar-brand-name">Uma</span>
-          <span className="sidebar-brand-tag">Hydroponic</span>
+          <span className="sidebar-brand-name" style={{ fontFamily: '"Space Grotesk", "Orbitron", sans-serif', fontWeight: 800, letterSpacing: '2px', background: 'linear-gradient(to right, #06b6d4, #22c55e)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>UMA</span>
+          <span className="sidebar-brand-tag" style={{ letterSpacing: '1px', textTransform: 'uppercase', fontSize: '9px', fontWeight: 600 }}>AgroAutomation</span>
         </div>
         <button 
           className="sidebar-toggle btn-icon btn-ghost" 

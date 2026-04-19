@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { SimulationProvider } from './SimulationContext';
+import { useSimulation } from './SimulationContext';
 import UmaToggle from './components/UmaToggle';
 import FarmSchematic from './components/FarmSchematic';
 import CustomSchematic from './components/CustomSchematic';
@@ -25,6 +25,14 @@ export default function Simulation() {
   const [pipes, setPipes] = useState<any[]>([]);
   const [loadingProject, setLoadingProject] = useState(!!projectId);
   const [allProjects, setAllProjects] = useState<any[]>([]);
+
+  const { initTopology, rowZones, humidityZones } = useSimulation();
+
+  useEffect(() => {
+     if (nodes.length > 0 && projectBase && !projectBase.isDemo) {
+        initTopology(nodes);
+     }
+  }, [nodes, projectBase, initTopology]);
 
   useEffect(() => {
     // Fetch all projects for the dropdown
@@ -111,23 +119,30 @@ export default function Simulation() {
         <AmbientStrip />
 
         {/* ═══ RESERVOIR CONTROL ═══ */}
-        <ReservoirCard />
+        {(!projectBase || nodes.some(n => n.type === 'Reservoir')) && (
+          <ReservoirCard />
+        )}
 
         {/* ═══ PER-ROW CONTROL CARDS ═══ */}
         <div className="row-cards-grid">
-          {[0, 1, 2, 3, 4].map(i => (
+          {(!projectBase || projectBase.isDemo ? [0, 1, 2, 3, 4] : rowZones.map((_, i) => i)).map(i => (
             <RowControlCard key={i} rowIndex={i} />
           ))}
         </div>
 
         {/* ═══ HUMIDITY ZONE CONTROL ═══ */}
-        <div className="hz-cards-grid">
-          <HumidityZoneCard zoneId="A" />
-          <HumidityZoneCard zoneId="B" />
-        </div>
+        {(!projectBase || nodes.some(n => n.type === 'Environment Zone')) && (
+          <div className="hz-cards-grid">
+            {(!projectBase || projectBase.isDemo ? ['A', 'B'] : humidityZones.map(z => z.id)).map(zoneId => (
+              <HumidityZoneCard key={zoneId} zoneId={zoneId as any} />
+            ))}
+          </div>
+        )}
 
         {/* ═══ CROP HEALTH & DISEASE SIMULATION ═══ */}
-        <DiseasePanel />
+        {(!projectBase || nodes.some(n => n.type === 'Tower' || n.type === 'Soil Plot')) && (
+          <DiseasePanel />
+        )}
       </div>
   );
 }

@@ -7,6 +7,7 @@ export interface SoilFieldProps {
   height?: number;
   fieldStyle?: string; // 'Rows', 'Grid', 'Flood'
   cropName?: string;
+  emoji?: string;
   isIrrigated: boolean;
   moistureLevel: number;
   fluidColor?: string;
@@ -14,7 +15,7 @@ export interface SoilFieldProps {
 
 export default function SoilField({ 
   x, y, width = 180, height = 120, 
-  fieldStyle = 'Rows', cropName = 'Unassigned', 
+  fieldStyle = 'Rows', cropName = 'Unassigned', emoji = '🌱',
   isIrrigated, moistureLevel, fluidColor = '#3b82f6' 
 }: SoilFieldProps) {
   
@@ -62,7 +63,7 @@ export default function SoilField({
 
       {/* Main Header */}
       <rect x={width / 2 - 40} y={-10} width={80} height={20} rx={4} fill="rgba(17,24,39,0.9)" stroke={dirtColor} strokeWidth="1" />
-      <text x={width / 2} y={3} textAnchor="middle" fill="#fff" fontSize="8" fontWeight="bold">🌱 {cropName}</text>
+      <text x={width / 2} y={3} textAnchor="middle" fill="#fff" fontSize="8" fontWeight="bold">{emoji} {cropName}</text>
 
       {/* Embedded Soil Moisture Sensor */}
       <g transform={`translate(${width - 40}, ${height - 25})`}>

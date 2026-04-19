@@ -72,7 +72,7 @@
 /* Stats */
 .ops-stats-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 24px;
   margin-bottom: 40px;
 }
@@ -99,6 +99,8 @@
 .ops-stat-icon.indigo { background: rgba(99, 102, 241, 0.1); color: #818cf8; }
 .ops-stat-icon.amber { background: rgba(245, 158, 11, 0.1); color: var(--amber); }
 .ops-stat-icon.emerald { background: rgba(16, 185, 129, 0.1); color: var(--emerald); }
+.ops-stat-icon.verified { background: rgba(34, 197, 94, 0.1); color: #22c55e; }
+.ops-stat-icon.rose { background: rgba(244, 63, 94, 0.1); color: #f43f5e; }
 
 .ops-stat-label {
   font-size: 13px;
@@ -156,6 +158,8 @@
   position: relative;
   overflow: hidden;
   transition: all var(--transition-base);
+  display: flex;
+  flex-direction: column;
 }
 
 .wo-card:hover {
@@ -180,14 +184,19 @@
   text-transform: uppercase;
   letter-spacing: 1px;
   border-bottom-left-radius: var(--radius-md);
+  border-bottom: 1px solid transparent;
+  border-left: 1px solid transparent;
 }
 
-.wo-status-ribbon.completed { background: rgba(16, 185, 129, 0.2); color: var(--emerald); }
-.wo-status-ribbon.pending { background: rgba(245, 158, 11, 0.2); color: var(--amber); }
+.wo-status-ribbon.open { background: rgba(99, 102, 241, 0.15); color: #818cf8; border-color: rgba(99, 102, 241, 0.4); }
+.wo-status-ribbon.completed { background: rgba(16, 185, 129, 0.15); color: var(--emerald); border-color: rgba(16, 185, 129, 0.4); }
+.wo-status-ribbon.verified { background: rgba(34, 197, 94, 0.15); color: #22c55e; border-color: rgba(34, 197, 94, 0.4); }
+.wo-status-ribbon.escalated { background: rgba(244, 63, 94, 0.15); color: #f43f5e; border-color: rgba(244, 63, 94, 0.4); }
 
 .wo-card-content {
   display: flex;
   gap: 16px;
+  flex: 1;
 }
 
 .wo-icon.completed { color: var(--emerald); }
@@ -196,11 +205,13 @@
 .wo-card-main {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .wo-id-row {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 12px;
   margin-bottom: 4px;
 }
@@ -234,6 +245,7 @@
   color: rgba(255, 255, 255, 0.8);
   line-height: 1.5;
   margin-bottom: 16px;
+  flex: 1;
 }
 
 .wo-meta-grid {
@@ -250,11 +262,19 @@
   gap: 8px;
   font-size: 13px;
   color: var(--text-secondary);
+  white-space: nowrap;
 }
 
 .wo-meta-item strong {
   color: rgba(255, 255, 255, 0.8);
   font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wo-review-box-container {
+  height: 210px;
+  overflow-y: auto;
 }
 
 .wo-alert-box {

@@ -12,7 +12,8 @@ export default function RowControlCard({ rowIndex }: RowControlCardProps) {
   const { rowZones, perturbRow, toggleRowValve, humidityZones } = useSimulation();
 
   const row = rowZones[rowIndex];
-  const crop = TOWER_CROPS[rowIndex];
+  if (!row) return null; // Safe guard for custom topologies mapping out of bounds initially
+
   const zone = humidityZones.find(z => z.id === row.humidityZone);
   const health = getRowHealth(row);
   const phStatus = getRowPhStatus(row.sensors.phInput, row.optimalPh);
@@ -21,10 +22,10 @@ export default function RowControlCard({ rowIndex }: RowControlCardProps) {
 
   const healthColor = health === 'danger' ? 'var(--rose)' : health === 'warning' ? 'var(--amber)' : 'var(--accent)';
 
-  const phSpike = crop.optimalPh[1] + 2.0;
-  const phDrop = crop.optimalPh[0] - 2.0;
-  const ecSpike = crop.optimalEc[1] + 1.5;
-  const ecDrop = Math.max(0, crop.optimalEc[0] - 1.0);
+  const phSpike = row.optimalPh[1] + 2.0;
+  const phDrop = row.optimalPh[0] - 2.0;
+  const ecSpike = row.optimalEc[1] + 1.5;
+  const ecDrop = Math.max(0, row.optimalEc[0] - 1.0);
   const rhSpike = 92;
   const rhDrop = 35;
 
@@ -34,10 +35,10 @@ export default function RowControlCard({ rowIndex }: RowControlCardProps) {
 
       {/* Header */}
       <div className="row-card-header">
-        <span className="row-card-emoji">{crop.emoji}</span>
+        <span className="row-card-emoji">{row.emoji}</span>
         <div className="row-card-title">
-          <span className="row-card-id">{crop.id} · Zone {row.humidityZone}</span>
-          <span className="row-card-crop">{crop.crop}</span>
+          <span className="row-card-id">{row.towerId} · Zone {row.humidityZone}</span>
+          <span className="row-card-crop">{row.crop}</span>
         </div>
       </div>
 
@@ -50,12 +51,12 @@ export default function RowControlCard({ rowIndex }: RowControlCardProps) {
         </div>
         <div className="row-sensor-reading">
           <span className="mono row-sensor-val">{row.sensors.phInput.toFixed(2)}</span>
-          <span className="row-sensor-range">({crop.optimalPh[0]}–{crop.optimalPh[1]})</span>
+          <span className="row-sensor-range">({row.optimalPh[0]}–{row.optimalPh[1]})</span>
         </div>
         <div className="sensor-bar-track">
           <div className="sensor-bar-optimal" style={{ 
-            left: `${((crop.optimalPh[0] - 4) / 6) * 100}%`,
-            width: `${((crop.optimalPh[1] - crop.optimalPh[0]) / 6) * 100}%` 
+            left: `${((row.optimalPh[0] - 4) / 6) * 100}%`,
+            width: `${((row.optimalPh[1] - row.optimalPh[0]) / 6) * 100}%` 
           }} />
           <div className="sensor-bar-fill" style={{
             width: `${Math.min(100, Math.max(0, ((row.sensors.phInput - 4) / 6) * 100))}%`,
@@ -81,12 +82,12 @@ export default function RowControlCard({ rowIndex }: RowControlCardProps) {
         </div>
         <div className="row-sensor-reading">
           <span className="mono row-sensor-val">{row.sensors.ecRunoff.toFixed(2)}</span>
-          <span className="row-sensor-range">({crop.optimalEc[0]}–{crop.optimalEc[1]})</span>
+          <span className="row-sensor-range">({row.optimalEc[0]}–{row.optimalEc[1]})</span>
         </div>
         <div className="sensor-bar-track">
           <div className="sensor-bar-optimal" style={{ 
-            left: `${(crop.optimalEc[0] / 5) * 100}%`,
-            width: `${((crop.optimalEc[1] - crop.optimalEc[0]) / 5) * 100}%` 
+            left: `${(row.optimalEc[0] / 5) * 100}%`,
+            width: `${((row.optimalEc[1] - row.optimalEc[0]) / 5) * 100}%` 
           }} />
           <div className="sensor-bar-fill" style={{
             width: `${Math.min(100, Math.max(0, ((row.sensors.ecRunoff) / 5) * 100))}%`,

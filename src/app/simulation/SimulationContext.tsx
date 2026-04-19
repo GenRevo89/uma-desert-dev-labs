@@ -62,6 +62,9 @@ interface SimulationContextType {
   toggleZoneHumidifier: (zoneId: 'A' | 'B') => void;
   toggleZoneDehumidifier: (zoneId: 'A' | 'B') => void;
 
+  // Topology Loading
+  initTopology: (nodes: any[]) => void;
+
   // Schema snapshot for Uma chat integration
   buildFullSnapshot: (overrides?: Record<string, any>) => any;
 
@@ -172,14 +175,14 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
         const res = await fetch('/api/graphql', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: `query { getTeamWorkers { id name role email } getWorkOrders { id workOrderId type description assignedTo status createdAt } }` }),
+          body: JSON.stringify({ query: `query { getTeamWorkers { id name role email } getWorkOrders { id workOrderId type description assignedTo status createdAt reviewed reviewResult workerNotes resolution timeSpent } }` }),
         });
         const { data } = await res.json();
         if (data?.getTeamWorkers) {
-          setTeamWorkers(data.getTeamWorkers.map((w: any) => ({ id: w.id, name: w.name, role: w.role, email: w.email })));
+          setTeamWorkers(data.getTeamWorkers.map((w: any) => ({ ...w })));
         }
         if (data?.getWorkOrders) {
-          setWorkOrders(data.getWorkOrders.map((o: any) => ({ id: o.workOrderId || o.id, type: o.type, description: o.description, assignedTo: o.assignedTo, status: o.status, createdAt: new Date(o.createdAt).getTime() })));
+          setWorkOrders(data.getWorkOrders.map((o: any) => ({ ...o, id: o.workOrderId || o.id, createdAt: !isNaN(Number(o.createdAt)) ? Number(o.createdAt) : new Date(o.createdAt).getTime() })));
         }
       } catch (e) {
         console.error('Failed to load team/orders from DB:', e);
@@ -190,25 +193,56 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('uma-settings-changed', handleSettingsChange);
   }, []);
 
-  /* ── CRON Interval for Work Order Oversight ── */
+  /* ── Helpers ── */
+  const ts = () => new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const addLog = useCallback((msg: string, type: LogEntry['type'] = 'info') => {
+    setLogs(prev => [{ time: ts(), msg, type }, ...prev].slice(0, 30));
+  }, []);
+
+  /* ── Background Telemetry & Data Refresh Loop ── */
   useEffect(() => {
     if (!umaActive) return;
 
-    const intervalMs = cronInterval * 60 * 1000;
+    let lastKnownTelemetryTime = Date.now() - 10000;
+
+    const intervalMs = 3000; // Poll frequently to keep reasoning stream synced
     const interval = setInterval(async () => {
       try {
-        await fetch('/api/cron', {
+        const res = await fetch('/api/graphql', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ reminderMinutes: reminderTimeframe, baseUrl: window.location.origin }),
+          body: JSON.stringify({ 
+            query: `query { 
+              getTelemetry { id type message timestamp }
+              getWorkOrders { id workOrderId type description assignedTo status createdAt reviewed reviewResult workerNotes resolution }
+            }` 
+          }),
         });
+        const { data } = await res.json();
+        
+        // 1. Process new telemetry
+        if (data?.getTelemetry) {
+          const newEvents = data.getTelemetry.filter((t: any) => new Date(t.timestamp).getTime() > lastKnownTelemetryTime);
+          if (newEvents.length > 0) {
+            lastKnownTelemetryTime = Math.max(...newEvents.map((t: any) => new Date(t.timestamp).getTime()));
+            newEvents.reverse().forEach((event: any) => {
+              addLog(event.message, event.type === 'alert' ? 'warning' : event.type === 'correction' ? 'success' : 'info');
+            });
+          }
+        }
+
+        // 2. Refresh Work Orders seamlessly
+        if (data?.getWorkOrders) {
+           setWorkOrders(data.getWorkOrders.map((o: any) => ({ ...o, id: o.workOrderId || o.id, createdAt: !isNaN(Number(o.createdAt)) ? Number(o.createdAt) : new Date(o.createdAt).getTime() })));
+        }
+
       } catch (e) {
-        console.error('CRON Check Failed', e);
+        console.error('Telemetry Pull Failed', e);
       }
     }, intervalMs);
 
     return () => clearInterval(interval);
-  }, [umaActive, cronInterval, reminderTimeframe]);
+  }, [umaActive, addLog]);
 
   /* ── Refs ── */
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -244,31 +278,35 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
   const playUmaAudio = useCallback((url: string) => {
     if (!audioRef.current) return;
     
-    if (!audioRef.current.paused || umaStateRef.current === 'speaking' || umaStateRef.current === 'analyzing' || umaStateRef.current === 'correcting') {
+    // If the audio element is actively emitting sound, push the new file to the queue.
+    // We DO NOT check umaStateRef here because setUmaState('speaking') is often called
+    // before the synthesis completes, which would trap the audio in the queue forever.
+    if (!audioRef.current.paused && audioRef.current.src) {
       audioQueueRef.current.push(url);
     } else {
       audioRef.current.src = url;
-      audioRef.current.play();
       setUmaState('speaking');
       
-      audioRef.current.onended = () => {
+      const processNext = () => {
         if (audioQueueRef.current.length > 0) {
           const nextUrl = audioQueueRef.current.shift()!;
           audioRef.current!.src = nextUrl;
-          audioRef.current!.play();
+          audioRef.current!.play().catch(processNext);
         } else {
           setUmaState('idle');
         }
       };
+
+      audioRef.current.play().catch((e) => {
+        console.warn('Uma audio playback suppressed or failed', e);
+        processNext();
+      });
+      
+      audioRef.current.onended = processNext;
     }
   }, []);
 
   /* ── Helpers ── */
-  const ts = () => new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  const addLog = useCallback((msg: string, type: LogEntry['type'] = 'info') => {
-    setLogs(prev => [{ time: ts(), msg, type }, ...prev].slice(0, 30));
-  }, []);
-
   /** Build a full snapshot of all sensors, actuators, and conditions for Uma */
   const buildFullSnapshot = useCallback((overrides?: Record<string, any>) => {
     const res = reservoirRef.current;
@@ -865,9 +903,31 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       queueAnomalyForUma('resolution', `Work order ${id} has been marked complete by the technician. You will review their completion notes on your next CRON check.`);
     }
   }, [addLog, queueAnomalyForUma]);
-
   /* ═══ PERTURBATION FUNCTIONS ═══ */
 
+  const initTopology = useCallback((nodes: any[]) => {
+    const towers = nodes.filter((n: any) => n.type === 'Tower');
+    if (towers.length > 0) {
+      setRowZones(towers.map((t, i) => {
+        const cropName = t.options?.crop || (TOWER_CROPS[i] ? TOWER_CROPS[i].crop : 'Butterhead Lettuce');
+        const cropProfile = TOWER_CROPS.find(c => c.crop === cropName) || TOWER_CROPS[0];
+        return {
+          towerId: t.id,
+          crop: cropProfile.crop,
+          emoji: cropProfile.emoji,
+          sensors: { phInput: cropProfile.eqPh, ecRunoff: cropProfile.eqEc, rh: cropProfile.eqRh, valveOpen: true },
+          optimalPh: cropProfile.optimalPh,
+          optimalEc: cropProfile.optimalEc,
+          optimalRh: cropProfile.optimalRh,
+          humidityZone: i < Math.max(1, Math.ceil(towers.length / 2)) ? 'A' : 'B'
+        };
+      }));
+      setTowerConditions(towers.map(t => ({
+        towerId: t.id, disease: null, injectedAt: null
+      })));
+      setSelectedTower(towers[0].id);
+    }
+  }, []);
   const perturbReservoir = useCallback(async (key: ReservoirKey, value: number, label: string) => {
     setReservoir(prev => ({ ...prev, [key]: value }));
     addLog(`⚠ ${label}`, 'danger');
@@ -983,6 +1043,7 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
     teamWorkers, workOrders, addWorker, issueWorkOrder, completeWorkOrder,
     perturbReservoir, perturbAmbient, perturbRow,
     toggleRowValve, toggleZoneHumidifier, toggleZoneDehumidifier,
+    initTopology,
     buildFullSnapshot,
     tick,
   };

@@ -1,15 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
+import dbConnect from '@/lib/mongoose';
+import { Telemetry } from '@/graphql/models';
 
 /**
  * Uma Work Order CRON Check
- * Called periodically by the frontend interval to:
- * 1. Check open work orders for overdue reminders
- * 2. Check completed-but-unreviewed orders for Uma to assess
+ * Executed autonomously via Vercel Cron (* * * * *) to assess open operations 
+ * and log background execution telemetry to the Digital Twin.
  */
-export async function POST(req: NextRequest) {
+async function handleCron(req: NextRequest) {
   try {
-    const { reminderMinutes, baseUrl } = await req.json();
-    const origin = baseUrl || new URL(req.url).origin;
+    let reminderMinutes = 30;
+    let baseUrl = '';
+
+    // Extract from POST body if manual trigger from SimulationContext (fallback)
+    if (req.method === 'POST') {
+      try {
+        const body = await req.json();
+        reminderMinutes = body.reminderMinutes || 30;
+        baseUrl = body.baseUrl || '';
+      } catch (e) {}
+    }
+
+    const origin = baseUrl || req.nextUrl.origin || 'http://localhost:3000';
     const gqlUrl = `${origin}/api/graphql`;
 
     const results: any = {
@@ -17,6 +29,18 @@ export async function POST(req: NextRequest) {
       reviews: [],
       escalations: [],
     };
+
+    // ── 0. Log Server Execution to Reasoning Stream ──
+    try {
+      await dbConnect();
+      await Telemetry.create({
+        type: 'cron_execution',
+        value: Date.now(),
+        message: 'Uma CRON: Autonomous operations sweep executed successfully.'
+      });
+    } catch (dbErr: any) {
+      console.error('Uma CRON: Failed to log telemetry execution:', dbErr.message);
+    }
 
     // ── 1. Check open work orders for overdue reminders ──
     const openRes = await fetch(gqlUrl, {
@@ -30,7 +54,7 @@ export async function POST(req: NextRequest) {
     const openOrders = openData?.data?.getOpenWorkOrders || [];
 
     const now = Date.now();
-    const reminderThresholdMs = (reminderMinutes || 30) * 60 * 1000;
+    const reminderThresholdMs = reminderMinutes * 60 * 1000;
 
     for (const wo of openOrders) {
       const lastContact = wo.lastReminderSentAt ? new Date(wo.lastReminderSentAt).getTime() : new Date(wo.createdAt).getTime();
@@ -59,7 +83,12 @@ export async function POST(req: NextRequest) {
           });
 
           results.reminders.push({ workOrderId: wo.workOrderId, reminderNumber: wo.reminderCount + 1 });
-          console.log(`Uma CRON: Reminder #${wo.reminderCount + 1} sent for ${wo.workOrderId} to ${wo.assignedEmail}`);
+          
+          await Telemetry.create({
+            type: 'alert',
+            value: 0,
+            message: `Uma CRON: Auto-dispatched escalation reminder #${wo.reminderCount + 1} for ${wo.workOrderId}.`
+          });
         } catch (e: any) {
           console.error(`Uma CRON: Failed to send reminder for ${wo.workOrderId}:`, e.message);
         }
@@ -83,7 +112,6 @@ export async function POST(req: NextRequest) {
 
     for (const wo of completedOrders) {
       try {
-        // Ask Uma to review the completion via the chat API
         const reviewPrompt = `[WORK ORDER REVIEW] Work Order ${wo.workOrderId} for "${wo.type}" on tower ${wo.towerId || 'unknown'} has been marked complete by the field technician.
 
 Worker Report:
@@ -94,7 +122,7 @@ Worker Report:
 
 Review this completion report. If the issue appears genuinely resolved, use the review_work_order tool with status "verified" and then use the restore_crop_health tool for tower ${wo.towerId || 'T1'}. 
 
-If the worker's response is insufficient or the issue needs further attention, use review_work_order with status "escalated". You MUST also use the issue_work_order tool to send a follow-up intervention to a 'Manager' from the team list, explaining the failure and what needs to be done.`;
+If the worker's response is insufficient or the issue needs further attention, use review_work_order with status "escalated". You MUST also use the issue_work_order tool to send a follow-up intervention to a 'Manager' from the team list, explaining the failure and why.`;
 
         const chatRes = await fetch(`${origin}/api/chat`, {
           method: 'POST',
@@ -109,7 +137,12 @@ If the worker's response is insufficient or the issue needs further attention, u
           const chatData = await chatRes.json();
           const reviewText = chatData.choices?.[0]?.message?.content || '';
           results.reviews.push({ workOrderId: wo.workOrderId, review: reviewText.slice(0, 200) });
-          console.log(`Uma CRON: Reviewed ${wo.workOrderId} — ${reviewText.slice(0, 100)}`);
+          
+          await Telemetry.create({
+            type: 'correction',
+            value: 0,
+            message: `Uma CRON: Operations review complete for ${wo.workOrderId}. Assessment generated.`
+          });
         }
       } catch (e: any) {
         console.error(`Uma CRON: Failed to review ${wo.workOrderId}:`, e.message);
@@ -125,4 +158,12 @@ If the worker's response is insufficient or the issue needs further attention, u
     console.error('Uma CRON Error:', e.message);
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
+}
+
+export async function GET(req: NextRequest) {
+  return handleCron(req);
+}
+
+export async function POST(req: NextRequest) {
+  return handleCron(req);
 }
