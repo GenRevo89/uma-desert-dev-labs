@@ -181,6 +181,28 @@ export const TOOLS = [
   },
   {
     type: "function" as const,
+    name: "query_team_members",
+    description: "Fetch all farm operations team members and their roles. Use when you need to know who is available for a work order or who works at the farm.",
+    parameters: {
+      type: "object",
+      properties: {},
+      required: [] as string[],
+    }
+  },
+  {
+    type: "function" as const,
+    name: "query_work_orders",
+    description: "Fetch the current operations and work orders. Use when asked about ongoing tasks, completed unreviewed orders, or work order history.",
+    parameters: {
+      type: "object",
+      properties: {
+        filter: { type: "string", enum: ["all", "open", "unreviewed"], description: "Filter for work orders. 'all' means all orders, 'open' means incomplete, 'unreviewed' means completed but pending verification." }
+      },
+      required: ["filter"],
+    }
+  },
+  {
+    type: "function" as const,
     name: "add_sensor",
     description: "Add a new sensor to the farm configuration database.",
     parameters: {
@@ -386,6 +408,20 @@ export async function executeTool(toolName: string, args: any, baseUrl: string, 
       }
       case 'query_telemetry': {
         const data = await executeGraphQL(baseUrl, `query { getTelemetry { id type value message timestamp } }`);
+        return JSON.stringify(data);
+      }
+      case 'query_team_members': {
+        const data = await executeGraphQL(baseUrl, `query { getTeamWorkers { id name role email } }`);
+        return JSON.stringify(data);
+      }
+      case 'query_work_orders': {
+        let query = `query { getWorkOrders { id workOrderId type description assignedTo status reviewed createdAt } }`;
+        if (args.filter === 'open') {
+          query = `query { getOpenWorkOrders { id workOrderId type description assignedTo status reviewed createdAt } }`;
+        } else if (args.filter === 'unreviewed') {
+          query = `query { getCompletedUnreviewedOrders { id workOrderId type description assignedTo status reviewed createdAt reviewResult } }`;
+        }
+        const data = await executeGraphQL(baseUrl, query);
         return JSON.stringify(data);
       }
       case 'add_sensor': {
