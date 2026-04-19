@@ -340,7 +340,9 @@ export async function POST(req: Request) {
     // Try to parse as JSON, fall back to raw text
     let parsed;
     try {
-      const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, responseText];
+      const backticks = String.fromCharCode(96, 96, 96);
+      const regex = new RegExp(backticks + "(?:json)?\\s*([\\s\\S]*?)" + backticks);
+      const jsonMatch = responseText.match(regex) || [null, responseText];
       parsed = JSON.parse(jsonMatch[1] || responseText);
     } catch {
       parsed = {

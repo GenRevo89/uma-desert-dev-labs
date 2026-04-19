@@ -10,4 +10,14 @@ const { handleRequest } = createYoga({
   fetchAPI: { Response }
 });
 
-export { handleRequest as GET, handleRequest as POST, handleRequest as OPTIONS };
+export async function GET(request: Request, context: any) {
+  return handleRequest(request, context);
+}
+
+export async function POST(request: Request, context: any) {
+  return handleRequest(request, context);
+}
+
+export async function OPTIONS(request: Request, context: any) {
+  return handleRequest(request, context);
+}
