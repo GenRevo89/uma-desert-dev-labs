@@ -74,7 +74,7 @@ export default function FarmSchematic() {
       </div>
 
       <div className="schematic-body">
-        <svg className="flow-svg" viewBox="0 0 1100 580" preserveAspectRatio="xMidYMid meet">
+        <svg className="flow-svg" viewBox="0 -35 1100 620" preserveAspectRatio="xMidYMid meet">
           <defs>
             <linearGradient id="waterGrad" x1="0" y1="0" x2="1" y2="0">
               <stop offset="0%" stopColor={fluidColor} stopOpacity="0" />
@@ -271,16 +271,16 @@ export default function FarmSchematic() {
 
           {/* ═══ UMA ORB ═══ */}
           <g className={`uma-svg-orb ${umaState}`}>
-            <circle cx="580" cy="280" r="28" fill="rgba(34,197,94,0.04)" stroke={umaActive ? 'rgba(34,197,94,0.4)' : 'rgba(255,255,255,0.1)'} strokeWidth="1" className="uma-ring-1" />
-            <circle cx="580" cy="280" r="20" fill="rgba(34,197,94,0.06)" stroke={umaActive ? 'rgba(34,197,94,0.5)' : 'rgba(255,255,255,0.12)'} strokeWidth="1" className="uma-ring-2" />
-            <circle cx="580" cy="280" r="12" fill={umaActive ? 'rgba(34,197,94,0.15)' : 'rgba(255,255,255,0.06)'} stroke={umaActive ? '#22c55e' : 'rgba(255,255,255,0.18)'} strokeWidth="1.5" />
-            {umaActive && <circle cx="580" cy="280" r="3" fill="#22c55e" filter="url(#glowSm)"><animate attributeName="r" values="2;4;2" dur="2s" repeatCount="indefinite" /></circle>}
-            <text x="580" y="316" textAnchor="middle" fill={umaActive ? '#4ade80' : 'rgba(255,255,255,0.3)'} fontSize="8" fontWeight="700" letterSpacing="1.5">UMA</text>
+            <circle cx="1000" cy="520" r="28" fill="rgba(34,197,94,0.04)" stroke={umaActive ? 'rgba(34,197,94,0.4)' : 'rgba(255,255,255,0.1)'} strokeWidth="1" className="uma-ring-1" />
+            <circle cx="1000" cy="520" r="20" fill="rgba(34,197,94,0.06)" stroke={umaActive ? 'rgba(34,197,94,0.5)' : 'rgba(255,255,255,0.12)'} strokeWidth="1" className="uma-ring-2" />
+            <circle cx="1000" cy="520" r="12" fill={umaActive ? 'rgba(34,197,94,0.15)' : 'rgba(255,255,255,0.06)'} stroke={umaActive ? '#22c55e' : 'rgba(255,255,255,0.18)'} strokeWidth="1.5" />
+            {umaActive && <circle cx="1000" cy="520" r="3" fill="#22c55e" filter="url(#glowSm)"><animate attributeName="r" values="2;4;2" dur="2s" repeatCount="indefinite" /></circle>}
+            <text x="1000" y="556" textAnchor="middle" fill={umaActive ? '#4ade80' : 'rgba(255,255,255,0.3)'} fontSize="8" fontWeight="700" letterSpacing="1.5">UMA</text>
             {umaActive && towerXPositions.map((tx, i) => (
-              <line key={`uma-line-${i}`} x1="580" y1="280" x2={tx} y2="280" stroke="rgba(34,197,94,0.15)" strokeWidth="1" strokeDasharray="4 4" />
+              <line key={`uma-line-${i}`} x1="1000" y1="520" x2={tx} y2="400" stroke="rgba(34,197,94,0.08)" strokeWidth="1" strokeDasharray="4 4" />
             ))}
             {umaActive && (
-              <line x1="580" y1="280" x2="115" y2="280" stroke="rgba(34,197,94,0.15)" strokeWidth="1" strokeDasharray="4 4" />
+              <line x1="1000" y1="520" x2="115" y2="400" stroke="rgba(34,197,94,0.08)" strokeWidth="1" strokeDasharray="4 4" />
             )}
           </g>
 
@@ -316,6 +316,7 @@ export default function FarmSchematic() {
           })}
         </svg>
       </div>
+      <DiseaseAlertModal />
     </div>
   );
 }

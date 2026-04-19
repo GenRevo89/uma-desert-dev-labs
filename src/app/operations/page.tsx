@@ -24,10 +24,11 @@ export default function OperationsPage() {
           <div className="ops-tab active">All</div>
           <div className="ops-tab">
             Pending 
-            {workOrders.filter(o => o.status === 'pending').length > 0 && (
-              <span className="ops-badge">{workOrders.filter(o => o.status === 'pending').length}</span>
+            {workOrders.filter(o => o.status === 'open').length > 0 && (
+              <span className="ops-badge">{workOrders.filter(o => o.status === 'open').length}</span>
             )}
           </div>
+          <div className="ops-tab">Open</div>
           <div className="ops-tab">Completed</div>
         </div>
       </div>
@@ -49,7 +50,7 @@ export default function OperationsPage() {
           </div>
           <div>
             <div className="ops-stat-label">Pending Actions</div>
-            <div className="ops-stat-value">{workOrders.filter(o => o.status === 'pending').length}</div>
+            <div className="ops-stat-value">{workOrders.filter(o => o.status === 'open').length}</div>
           </div>
         </div>
         <div className="ops-stat-card">
@@ -97,7 +98,7 @@ export default function OperationsPage() {
                   </div>
 
                   <p className="wo-desc">
-                    {o.instructions}
+                    {o.description}
                   </p>
 
                   <div className="wo-meta-grid">
@@ -113,7 +114,7 @@ export default function OperationsPage() {
                 </div>
               </div>
 
-              {o.status === 'pending' && (
+              {o.status === 'open' && (
                <div className="wo-alert-box">
                   Dispatch email sent via AWS SES. Awaiting field technician completion ping from mobile terminal.
                </div>

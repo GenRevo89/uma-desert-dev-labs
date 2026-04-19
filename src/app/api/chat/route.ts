@@ -121,6 +121,15 @@ PERSONALITY:
   sections.push(
     '', 'INTERVENTION GUIDELINES:',
     '',
+    'OPERATIONAL RANGES (equilibrium → acceptable range):',
+    '  - Reservoir pH: 6.0 (5.5–6.5)',
+    '  - Water Temp: 24.0°C (20–28°C)',
+    '  - Room Humidity: 68% (55–75%)',
+    '  - EC: 1.8 mS/cm (1.2–2.5 mS/cm)',
+    '  - Dissolved O₂: 8.2 mg/L (6.0–10.0 mg/L)',
+    '  - Flow Rate: 2.4 L/min (1.5–3.5 L/min)',
+    '  - PAR Intensity: 450 µmol (300–550 µmol)',
+    '',
     'CRITICAL — UNDERSTAND THE PLUMBING:',
     '  - pH and EC corrections are CENTRALIZED at the reservoir/mixing tank via dosing pumps.',
     '  - Per-tower pH sensors are DIAGNOSTIC — they show if feed reaches each tower correctly.',
@@ -144,7 +153,16 @@ PERSONALITY:
     '  - High RH + poor airflow → fungal disease conditions',
     '  - If per-tower pH differs from reservoir pH, suspect a clog or biofilm, not a dosing issue',
     '',
+    'DISEASE MANAGEMENT PROTOCOLS:',
+    '  - Pythium Root Rot: Reduce water temp <22°C, increase O₂, add H₂O₂ at 3mL/L, increase flow. Requires physical root zone inspection.',
+    '  - Powdery Mildew: Reduce zone humidity via dehumidifier, increase airflow, reduce PAR. Requires foliar treatment application.',
+    '  - Botrytis Gray Mold: Lower zone humidity <65%, increase ventilation, potassium bicarbonate spray. Requires manual infected tissue removal.',
+    '  - Calcium Tipburn: Reduce EC, slow growth, increase airflow around affected row. Requires physical leaf inspection.',
+    '  - Fusarium Wilt: Sterilize reservoir with UV/ozone, lower water temp, flush system. Requires reservoir sterilization procedure.',
+    '  - Aphid Infestation: Neem oil foliar, reduce zone humidity. Requires beneficial insect deployment or manual pesticide application.',
+    '',
     'When issuing actuator commands, use the control_actuator tool.',
+    'When a condition requires physical human intervention (disease treatment, manual inspection, equipment repair, biological pest control), you MUST issue a work order using the issue_work_order tool, selecting the best-fit team member by role.',
     'Always explain your reasoning and how it connects to the sensor readings.',
   );
 
@@ -285,8 +303,38 @@ const TOOLS = [
           type: "string",
           description: "Detailed instructions of what the worker needs to do.",
         },
+        towerId: {
+          type: "string",
+          description: "The tower ID this work order relates to (e.g., 'T1', 'T2'), if applicable.",
+        },
       },
       required: ["workerEmail", "type", "description"],
+    }
+  },
+  {
+    type: "function" as const,
+    name: "review_work_order",
+    description: "Review a completed work order from a field technician and mark it as either verified (status: 'verified') if the resolution is satisfactory, or escalate it (status: 'escalated') if further action is needed.",
+    parameters: {
+      type: "object",
+      properties: {
+        workOrderId: { type: "string" },
+        status: { type: "string", enum: ["verified", "escalated"] },
+        reviewResult: { type: "string", description: "Your analysis and reasoning for this decision." },
+      },
+      required: ["workOrderId", "status", "reviewResult"],
+    }
+  },
+  {
+    type: "function" as const,
+    name: "restore_crop_health",
+    description: "Programmatically clears the visual disease state on a specific tower, restoring the crop to a healthy visual appearance in the digital twin. Call this ONLY after verifying a completed work order for crop treatment.",
+    parameters: {
+      type: "object",
+      properties: {
+        towerId: { type: "string", description: "The tower ID to restore, e.g. 'T1', 'T2' etc." },
+      },
+      required: ["towerId"],
     }
   },
 ];
@@ -428,24 +476,43 @@ async function executeTool(toolName: string, args: any, baseUrl: string, farmSch
         try {
           // Send SES Email
           const { sendWorkOrderEmail } = await import('@/lib/aws/ses');
-          // For logging/tracking in the digital twin: WO ID
-          const mockId = `WO-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-          const success = await sendWorkOrderEmail(args.workerEmail, worker.name, mockId, args.description);
+          // Derive origin from the request URL for the worker terminal link
+          const reqOrigin = new URL(baseUrl).origin;
+          
+          let workOrderId = args.workOrderId;
+          if (!workOrderId) {
+            workOrderId = `WO-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+          }
+
+          const success = await sendWorkOrderEmail(args.workerEmail, worker.name, workOrderId, args.description, reqOrigin);
           
           if (!success) throw new Error('SES Gateway failed');
           
           return JSON.stringify({
             executed: true,
             workOrder: {
+              workOrderId: workOrderId,
               type: args.type,
               description: args.description,
-              assignedTo: worker.name
+              assignedTo: worker.name,
+              towerId: args.towerId,
             },
             note: 'Work Order sent successfully to the human technician via email.',
           });
         } catch (e: any) {
           return JSON.stringify({ error: `Failed to dispatch email: ${e.message}` });
         }
+      }
+      case 'review_work_order': {
+        const data = await executeGraphQL(baseUrl, `mutation { reviewWorkOrder(workOrderId: "${args.workOrderId}", status: "${args.status}", reviewResult: "${args.reviewResult.replace(/"/g, '\\"')}") { workOrderId status } }`);
+        return JSON.stringify(data);
+      }
+      case 'restore_crop_health': {
+        return JSON.stringify({
+          restore_crop_requested: true,
+          towerId: args.towerId,
+          note: `Crop health restoration signal sent to digital twin for tower ${args.towerId}.`,
+        });
       }
       default:
         return JSON.stringify({ error: `Unknown tool: ${toolName}` });
@@ -460,10 +527,23 @@ async function executeTool(toolName: string, args: any, baseUrl: string, farmSch
 
 export async function POST(req: Request) {
   try {
-    const { messages, farmSchema } = await req.json();
+    const { messages, farmSchema, language } = await req.json();
 
     // Build dynamic system prompt from the loaded schematic
-    const systemPrompt = buildSystemPrompt(farmSchema);
+    let systemPrompt = buildSystemPrompt(farmSchema);
+    
+    // Universally enforce natural voice narration format
+    systemPrompt += `\n\nCRITICAL NARRATION FORMAT:
+- Do NOT use structural headings or prefixes (e.g. "Diagnosis:", "Action taken:", "Diagnóstico:").
+- Do NOT use bullet points or markdown lists.
+- Speak your response in a single, continuous, natural conversational flow as a script for a voice actor.`;
+    
+    if (language && language !== 'English') {
+      systemPrompt += `\n\nCRITICAL LANGUAGE OVERRIDE:
+- You must respond to all prompts and narrations entirely in ${language}.
+- Tools and system actions will return execution notes in English. You MUST translate these actions natively into ${language} before incorporating them into your speech.
+- NEVER switch back to English under any circumstances. Keep the same concise, authoritative tone.`;
+    }
 
     // Build Responses API input
     const input: any[] = [];
@@ -474,7 +554,7 @@ export async function POST(req: Request) {
         type: 'message',
         role: 'user',
         content: [
-          { type: 'input_image', image_url: farmSchema.schematicImage },
+          { type: 'input_image', image_url: { url: farmSchema.schematicImage } },
           { type: 'input_text', text: '[SYSTEM] Live capture of the farm schematic. Cross-reference visual sensor colors (green=nominal, amber=warning, red=danger) with the numeric readings in your system prompt.' },
         ],
       });
@@ -494,22 +574,35 @@ export async function POST(req: Request) {
     let finalText = '';
     const actuatorCommands: any[] = [];
     const issuedWorkOrders: any[] = [];
+    const restoredTowers: string[] = [];
     let captureRequested = false;
 
     // Multi-step tool loop (max 6 iterations)
     for (let i = 0; i < 6; i++) {
-      const response = await fetch(process.env.AZURE_OPENAI_ENDPOINT!, {
+      const requestBody = {
+          model: 'gpt-5.4-mini',
+          instructions: systemPrompt,
+          input,
+          tools: TOOLS,
+        };
+        const bodyStr = JSON.stringify(requestBody);
+        // Debug: log the structure of input (truncate image data)
+        const debugInput = input.map((item: any) => {
+          if (item.content && Array.isArray(item.content)) {
+            return { ...item, content: item.content.map((c: any) => c.type === 'input_image' ? { type: c.type, image_url: (c.image_url || '').substring(0, 50) + '...' } : c) };
+          }
+          return { ...item, content: typeof item.content === 'string' ? item.content.substring(0, 100) + '...' : item.content };
+        });
+        console.log('Uma API Input:', JSON.stringify(debugInput, null, 2));
+        console.log(`Uma API Request: ${input.length} input items, ${(bodyStr.length / 1024).toFixed(0)}KB payload`);
+        
+        const response = await fetch(process.env.AZURE_OPENAI_ENDPOINT!, {
         method: 'POST',
         headers: {
           'api-key': process.env.AZURE_OPENAI_KEY!,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          model: 'gpt-5.4-mini',
-          instructions: systemPrompt,
-          input,
-          tools: TOOLS,
-        }),
+        body: bodyStr,
       });
 
       if (!response.ok) {
@@ -548,6 +641,14 @@ export async function POST(req: Request) {
                 const parsedResult = JSON.parse(result);
                 if (parsedResult.executed && parsedResult.workOrder) {
                   issuedWorkOrders.push(parsedResult.workOrder);
+                }
+              } catch (e) {}
+            }
+            if (fc.name === 'restore_crop_health') {
+              try {
+                const parsedResult = JSON.parse(result);
+                if (parsedResult.restore_crop_requested && parsedResult.towerId) {
+                  restoredTowers.push(parsedResult.towerId);
                 }
               } catch (e) {}
             }
@@ -595,6 +696,8 @@ export async function POST(req: Request) {
       actuatorCommands: actuatorCommands.length > 0 ? actuatorCommands : undefined,
       // Work orders issued
       issuedWorkOrders: issuedWorkOrders.length > 0 ? issuedWorkOrders : undefined,
+      // Towers restored
+      restoredTowers: restoredTowers.length > 0 ? restoredTowers : undefined,
       // Whether Uma requested a fresh schematic capture
       captureRequested: captureRequested || undefined,
     });

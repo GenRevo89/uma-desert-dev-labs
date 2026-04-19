@@ -3,11 +3,14 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Activity, MessageSquare, LayoutGrid, Leaf, PanelLeftClose, PanelLeftOpen, Users, ClipboardList } from 'lucide-react';
+import { Activity, MessageSquare, LayoutGrid, Leaf, PanelLeftClose, PanelLeftOpen, Users, ClipboardList, Settings } from 'lucide-react';
 
 export function Sidebar() {
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
+
+  // Hide sidebar on standalone pages (worker terminal)
+  if (pathname.startsWith('/worker')) return null;
 
   const navItems = [
     { href: '/simulation', label: 'Digital Twin', icon: Activity, description: 'Live simulation' },
@@ -15,6 +18,7 @@ export function Sidebar() {
     { href: '/chat', label: 'Uma Chat', icon: MessageSquare, description: 'AI interface' },
     { href: '/team', label: 'Team', icon: Users, description: 'Manage workers' },
     { href: '/operations', label: 'Operations', icon: ClipboardList, description: 'Work orders' },
+    { href: '/settings', label: 'Settings', icon: Settings, description: 'System config' },
   ];
 
   return (

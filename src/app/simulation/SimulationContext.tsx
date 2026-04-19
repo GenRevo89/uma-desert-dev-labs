@@ -30,6 +30,8 @@ interface SimulationContextType {
   toggleUma: () => void;
   voiceEnabled: boolean;
   setVoiceEnabled: (v: boolean) => void;
+  umaLanguage: string;
+  setUmaLanguage: (l: string) => void;
 
   // System state
   logs: LogEntry[];
@@ -42,6 +44,8 @@ interface SimulationContextType {
   selectedTower: string;
   setSelectedTower: (id: string) => void;
   injectDisease: (towerId: string, disease: Disease) => void;
+  fusedDiseaseImage: string | null;
+  setFusedDiseaseImage: (url: string | null) => void;
 
   // Team & Work Orders
   teamWorkers: TeamWorker[];
@@ -118,6 +122,7 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
   const [umaActive, setUmaActive] = useState(false);
   const [umaState, setUmaState] = useState<UmaState>('offline');
   const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [umaLanguage, setUmaLanguage] = useState('English');
 
   /* ── System state ── */
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -132,11 +137,78 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
     TOWER_CROPS.map(t => ({ towerId: t.id, disease: null, injectedAt: null }))
   );
   const [selectedTower, setSelectedTower] = useState<string>('T1');
+  const [fusedDiseaseImage, setFusedDiseaseImage] = useState<string | null>(null);
 
   /* ── Team & Work Orders State ── */
   // Auto-init with the user's requesting email for testing mock if needed, or leave empty
   const [teamWorkers, setTeamWorkers] = useState<TeamWorker[]>([]);
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
+
+  /* ── Settings State ── */
+  const [cronInterval, setCronInterval] = useState(5);
+  const [reminderTimeframe, setReminderTimeframe] = useState(30);
+
+  /* ── Load team workers & work orders from DB on mount ── */
+  useEffect(() => {
+    // Load Settings
+    const stored = localStorage.getItem('uma_settings');
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        setCronInterval(parsed.cronInterval || 5);
+        setReminderTimeframe(parsed.reminderTimeframe || 30);
+      } catch (e) {}
+    }
+
+    // Listen for settings changes
+    const handleSettingsChange = (e: any) => {
+      setCronInterval(e.detail.cronInterval);
+      setReminderTimeframe(e.detail.reminderTimeframe);
+    };
+    window.addEventListener('uma-settings-changed', handleSettingsChange);
+
+    const loadFromDB = async () => {
+      try {
+        const res = await fetch('/api/graphql', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: `query { getTeamWorkers { id name role email } getWorkOrders { id workOrderId type description assignedTo status createdAt } }` }),
+        });
+        const { data } = await res.json();
+        if (data?.getTeamWorkers) {
+          setTeamWorkers(data.getTeamWorkers.map((w: any) => ({ id: w.id, name: w.name, role: w.role, email: w.email })));
+        }
+        if (data?.getWorkOrders) {
+          setWorkOrders(data.getWorkOrders.map((o: any) => ({ id: o.workOrderId || o.id, type: o.type, description: o.description, assignedTo: o.assignedTo, status: o.status, createdAt: new Date(o.createdAt).getTime() })));
+        }
+      } catch (e) {
+        console.error('Failed to load team/orders from DB:', e);
+      }
+    };
+    loadFromDB();
+
+    return () => window.removeEventListener('uma-settings-changed', handleSettingsChange);
+  }, []);
+
+  /* ── CRON Interval for Work Order Oversight ── */
+  useEffect(() => {
+    if (!umaActive) return;
+
+    const intervalMs = cronInterval * 60 * 1000;
+    const interval = setInterval(async () => {
+      try {
+        await fetch('/api/cron', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reminderMinutes: reminderTimeframe, baseUrl: window.location.origin }),
+        });
+      } catch (e) {
+        console.error('CRON Check Failed', e);
+      }
+    }, intervalMs);
+
+    return () => clearInterval(interval);
+  }, [umaActive, cronInterval, reminderTimeframe]);
 
   /* ── Refs ── */
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -152,6 +224,8 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
   towerConditionsRef.current = towerConditions;
   const teamWorkersRef = useRef(teamWorkers);
   teamWorkersRef.current = teamWorkers;
+  const fusedDiseaseImageRef = useRef(fusedDiseaseImage);
+  fusedDiseaseImageRef.current = fusedDiseaseImage;
   
   // Buffered Monitoring Refs
   const pendingSpikesRef = useRef<{sensor: string, label: string}[]>([]);
@@ -160,10 +234,33 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
   umaStateRef.current = umaState;
   const umaActiveRef = useRef(umaActive);
   umaActiveRef.current = umaActive;
+  const audioQueueRef = useRef<string[]>([]);
 
   useEffect(() => {
     audioRef.current = new Audio();
     return () => { if (audioRef.current) audioRef.current.pause(); };
+  }, []);
+
+  const playUmaAudio = useCallback((url: string) => {
+    if (!audioRef.current) return;
+    
+    if (!audioRef.current.paused || umaStateRef.current === 'speaking' || umaStateRef.current === 'analyzing' || umaStateRef.current === 'correcting') {
+      audioQueueRef.current.push(url);
+    } else {
+      audioRef.current.src = url;
+      audioRef.current.play();
+      setUmaState('speaking');
+      
+      audioRef.current.onended = () => {
+        if (audioQueueRef.current.length > 0) {
+          const nextUrl = audioQueueRef.current.shift()!;
+          audioRef.current!.src = nextUrl;
+          audioRef.current!.play();
+        } else {
+          setUmaState('idle');
+        }
+      };
+    }
   }, []);
 
   /* ── Helpers ── */
@@ -408,20 +505,60 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       });
 
       if (outOfRange === 0) {
-        addLog(`Uma: Full equilibrium confirmed across all ${total} sensors.`, 'success');
-        addLog(`Uma: Disengaging actuators. Returning to passive monitoring.`, 'info');
+        const logEq = umaLanguage === 'Español' ? `Uma: Equilibrio total confirmado en los ${total} sensores.` 
+            : umaLanguage === 'Français' ? `Uma: Équilibre total confirmé sur les ${total} capteurs.`
+            : umaLanguage === 'Deutsch' ? `Uma: Volles Gleichgewicht auf allen ${total} Sensoren bestätigt.`
+            : umaLanguage === '日本語' ? `Uma: 全${total}センサーで完全同期確認。`
+            : umaLanguage === '中文' ? `Uma: 所有${total}个传感器的平衡已确认。`
+            : umaLanguage === 'Hindi' ? `Uma: सभी ${total} सेंसरों पर पूर्ण संतुलन की पुष्टि की गई।`
+            : umaLanguage === 'Arabic' ? `Uma: تم تأكيد التوازن الكامل عبر جميع المستشعرات الـ ${total}.`
+            : `Uma: Full equilibrium confirmed across all ${total} sensors.`;
+        
+        const logDisengage = umaLanguage === 'Español' ? `Uma: Desactivando actuadores. Regresando a monitoreo pasivo.`
+            : umaLanguage === 'Français' ? `Uma: Désactivation des actionneurs. Retour à la surveillance active.`
+            : umaLanguage === 'Deutsch' ? `Uma: Aktuatoren werden deaktiviert. Rüchkher zur passiven Überwachung.`
+            : umaLanguage === '日本語' ? `Uma: アクチュエータを解除。受動的監視モードに戻ります。`
+            : umaLanguage === '中文' ? `Uma: 脱开执行器。返回被动监控。`
+            : umaLanguage === 'Hindi' ? `Uma: एक्चुएटर्स को बंद कर रहे हैं। निष्क्रिय निगरानी पर ফিরে آ रहे हैं।`
+            : umaLanguage === 'Arabic' ? `Uma: إيقاف تشغيل المحركات. العودة إلى المراقبة السلبية.`
+            : `Uma: Disengaging actuators. Returning to passive monitoring.`;
+
+        addLog(logEq, 'success');
+        addLog(logDisengage, 'info');
+
         setActiveInterventions([]);
         setMonitoringRecovery(false);
         setHumidityZones(prev => prev.map(z => ({ ...z, humidifierOn: false, dehumidifierOn: false })));
 
         if (voiceEnabled && audioRef.current) {
-          generateSpeechUrl(`Full equilibrium restored. All sensors within operational range. Disengaging actuators.`)
-            .then(url => { audioRef.current!.src = url; audioRef.current!.play(); })
-            .catch(() => {});
+          fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              messages: [{ role: 'user', content: `All ${total} sensors are back in nominal equilibrium. Acknowledge this briefly to the engineering team and state you are disengaging actuators and returning to passive monitoring.`}],
+              farmSchema: {},
+              language: umaLanguage,
+            }),
+          })
+          .then(res => res.json())
+          .then(data => {
+            const content = data.choices?.[0]?.message?.content;
+            if (content) return generateSpeechUrl(content.slice(0, 400));
+          })
+          .then(url => { if (url) playUmaAudio(url); })
+          .catch(() => {});
         }
       } else {
         const recovered = total - outOfRange;
-        addLog(`Uma [Monitoring]: ${recovered}/${total} nominal · ${outOfRange} sensors recovering`, 'info');
+        const msg = umaLanguage === 'Español' ? `Uma [Monitoreando]: ${recovered}/${total} nominal · ${outOfRange} ajustando`
+               : umaLanguage === 'Français' ? `Uma [Surveillance]: ${recovered}/${total} nominal · ${outOfRange} en restauration`
+               : umaLanguage === 'Deutsch' ? `Uma [Überwachung]: ${recovered}/${total} nominal · ${outOfRange} justieren`
+               : umaLanguage === '日本語' ? `Uma [監視中]: ${recovered}/${total} 正常 · ${outOfRange} 調整中`
+               : umaLanguage === '中文' ? `Uma [监控中]: ${recovered}/${total} 正常 · ${outOfRange} 调整中`
+               : umaLanguage === 'Hindi' ? `Uma [निगरानी]: ${recovered}/${total} सामान्य · ${outOfRange} बहाल करना`
+               : umaLanguage === 'Arabic' ? `Uma [مراقبة]: ${recovered}/${total} عادي · ${outOfRange} يتعافى`
+               : `Uma [Monitoring]: ${recovered}/${total} nominal · ${outOfRange} sensors recovering`;
+        addLog(msg, 'info');
       }
     }, 4000);
 
@@ -516,45 +653,45 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
     }));
   }, [addLog]);
 
-  /* ═══ UMA MONITORING CALL ═══ */
+  /* ═══ UMA MONITORING CALL (via /api/chat) ═══ */
   const callUmaMonitor = useCallback(async (sensorSnapshot: any, trigger: string) => {
     if (!umaActive) return;
     setUmaState('analyzing');
     addLog('Uma: Anomaly detected. Analyzing sensor array...', 'info');
 
     try {
-      const res = await fetch('/api/monitor', {
+      // Build the alert message as a chat user message
+      const alertMessage = `[AUTONOMOUS ALERT] ${trigger}\n\nAnalyze the current sensor state, diagnose the issue, and take corrective action using your actuator tools. If physical human intervention is required, issue a work order. After acting, provide a brief spoken narration of what you did. You must respond to all messages in exactly this language: ${umaLanguage}.`;
+
+      // Build farmSchema from snapshot (don't include schematicImage — model may not support vision)
+      const farmSchema = { ...sensorSnapshot };
+
+      const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sensorState: sensorSnapshot, triggeredSensor: trigger }),
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: alertMessage }],
+          farmSchema,
+          language: umaLanguage,
+        }),
       });
-      if (!res.ok) throw new Error('Monitor API failed');
+      if (!res.ok) throw new Error('Chat API failed');
       const umaResponse = await res.json();
 
       setUmaState('correcting');
-      if (umaResponse.analysis) addLog(`Uma [Analysis]: ${umaResponse.analysis}`, 'info');
-      if (umaResponse.strategy) addLog(`Uma [Strategy]: ${umaResponse.strategy}`, 'success');
 
+      // Execute actuator commands returned by Uma's tool calls
       const newInterventions: ActiveIntervention[] = [];
-      if (umaResponse.actions && Array.isArray(umaResponse.actions)) {
-        for (const action of umaResponse.actions) {
-          if (action.actuator) {
-            addLog(`Uma [Actuator]: ${action.actuator} — ${action.detail || ''}`, 'success');
-            if (action.sensor) {
-              newInterventions.push({ sensor: action.sensor, actuator: action.actuator, detail: action.detail || '', startedAt: Date.now() });
-            }
-          }
-        }
-      }
-      
-      // Execute Structural Actuator Commands
       if (umaResponse.actuatorCommands && Array.isArray(umaResponse.actuatorCommands)) {
         for (const cmd of umaResponse.actuatorCommands) {
+          addLog(`Uma [Actuator]: ${cmd.target} ${cmd.id} → ${cmd.action} (${cmd.reason || ''})`, 'success');
+          newInterventions.push({ sensor: cmd.target, actuator: `${cmd.target} ${cmd.id}`, detail: cmd.reason || cmd.action, startedAt: Date.now() });
+
           if (cmd.target === 'valve') {
              if (cmd.action === 'purge') {
-               toggleRowValve(cmd.id, false); // close valve
+               toggleRowValve(cmd.id, false);
                addLog(`Uma [Actuator]: Purging line ${cmd.id}...`, 'warning');
-               setTimeout(() => toggleRowValve(cmd.id, true), 3500); // reopen
+               setTimeout(() => toggleRowValve(cmd.id, true), 3500);
              } else {
                toggleRowValve(cmd.id, cmd.action === 'open');
              }
@@ -566,29 +703,22 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
              setReservoir(prev => ({ ...prev, ph: prev.ph + (cmd.action === 'dose_down' ? -0.5 : 0.5) }));
              setSystemActuators(prev => ({ ...prev, ph_doser: true }));
              setTimeout(() => setSystemActuators(p => ({ ...p, ph_doser: false })), 3500);
-             addLog(`Uma [Actuator]: pH Doser ${cmd.action === 'dose_down' ? 'Down' : 'Up'} engaged`, 'success');
           } else if (cmd.target === 'nutrient_doser') {
              setReservoir(prev => ({ ...prev, ec: prev.ec + 0.3 }));
              setSystemActuators(prev => ({ ...prev, nutrient_doser: true }));
              setTimeout(() => setSystemActuators(p => ({ ...p, nutrient_doser: false })), 3500);
-             addLog('Uma [Actuator]: Nutrient Doser engaged', 'success');
           } else if (cmd.target === 'ro_valve') {
              setReservoir(prev => ({ ...prev, ec: prev.ec - 0.2, ph: prev.ph - 0.1 }));
-             addLog('Uma [Actuator]: RO Dilution Valve opened', 'success');
           } else if (cmd.target === 'air_pump') {
              setReservoir(prev => ({ ...prev, do2: prev.do2 + 1.2 }));
-             addLog('Uma [Actuator]: Air Pump On', 'success');
           } else if (cmd.target === 'circulation_pump') {
              setReservoir(prev => ({ ...prev, flow: prev.flow + 0.8 }));
-             addLog('Uma [Actuator]: Circulation Pump increased', 'success');
           } else if (cmd.target === 'chiller') {
              setReservoir(prev => ({ ...prev, temp: prev.temp - 2.5 }));
              setSystemActuators(prev => ({ ...prev, chiller: true }));
              setTimeout(() => setSystemActuators(p => ({ ...p, chiller: false })), 5000);
-             addLog('Uma [Actuator]: Chiller engaged', 'success');
           } else if (cmd.target === 'led_dimmer') {
              setAmbient(prev => ({ ...prev, light: prev.light + (cmd.action === 'dose_down' ? -50 : 50) }));
-             addLog('Uma [Actuator]: LED Dimmer adjusted', 'success');
           }
         }
       }
@@ -600,30 +730,44 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
             type: wo.type,
             description: wo.description,
             assignedTo: wo.assignedTo,
-            status: 'open'
-          });
+            status: 'open',
+            // Pass the ID generated by Uma down to issueWorkOrder
+            id: wo.workOrderId || `WO-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+            // Also need towerId for restoration
+            towerId: wo.towerId,
+          } as any);
         }
       }
-      
+      // Process Restored Towers
+      if (umaResponse.restoredTowers && Array.isArray(umaResponse.restoredTowers)) {
+        setTowerConditions(prev => prev.map(tc => {
+          if (umaResponse.restoredTowers.includes(tc.towerId)) {
+            addLog(`Uma [Crop Control]: Restoring visual state of ${tc.towerId} to healthy`, 'success');
+            return { ...tc, disease: null, injectedAt: null };
+          }
+          return tc;
+        }));
+      }
+
       setActiveInterventions(prev => [...prev, ...newInterventions]);
       setMonitoringRecovery(true);
       addLog('Uma: Monitoring recovery. Will notify when equilibrium is restored.', 'info');
 
-      const narration = umaResponse.narration || umaResponse.analysis || 'Corrective action applied.';
+      // Extract narration from chat response
+      const content = umaResponse.choices?.[0]?.message?.content || 'Corrective action applied.';
+      addLog(`Uma: ${content.slice(0, 200)}`, 'info');
       setUmaState('speaking');
 
       if (voiceEnabled && audioRef.current) {
         try {
-          const url = await generateSpeechUrl(narration.slice(0, 400));
-          audioRef.current.src = url;
-          audioRef.current.play();
-          audioRef.current.onended = () => setUmaState('idle');
+          const url = await generateSpeechUrl(content.slice(0, 400));
+          playUmaAudio(url);
         } catch { setTimeout(() => setUmaState('idle'), 3000); }
       } else {
         setTimeout(() => setUmaState('idle'), 3000);
       }
     } catch {
-      addLog('Uma: Monitoring API unavailable. Falling back to baseline correction.', 'warning');
+      addLog('Uma: Chat API unavailable. Falling back to baseline correction.', 'warning');
       setUmaState('idle');
     }
   }, [umaActive, voiceEnabled, addLog, toggleRowValve, toggleZoneHumidifier, toggleZoneDehumidifier]);
@@ -662,35 +806,63 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
 
   /* ═══ TEAM & WORK ORDER FUNCTIONS ═══ */
 
-  const addWorker = useCallback((worker: TeamWorker) => {
+  const addWorker = useCallback(async (worker: TeamWorker) => {
+    // Persist to DB
+    try {
+      const res = await fetch('/api/graphql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: `mutation { addTeamWorker(name: "${worker.name}", role: "${worker.role}", email: "${worker.email}") { id name role email } }` }),
+      });
+      const { data } = await res.json();
+      if (data?.addTeamWorker) {
+        setTeamWorkers(prev => [...prev, { id: data.addTeamWorker.id, name: data.addTeamWorker.name, role: data.addTeamWorker.role, email: data.addTeamWorker.email }]);
+        addLog(`👤 ${worker.name} (${worker.role}) added to team`, 'success');
+        return;
+      }
+    } catch (e) {
+      console.error('Failed to persist worker:', e);
+    }
+    // Fallback to local state
     setTeamWorkers(prev => [...prev, worker]);
-  }, []);
+  }, [addLog]);
 
-  const issueWorkOrder = useCallback((order: Omit<WorkOrder, 'id' | 'createdAt'>) => {
+  const issueWorkOrder = useCallback(async (order: any) => {
+    const workOrderId = order.id; // Generated in API route or locally
+    // Persist to DB
+    try {
+      const res = await fetch('/api/graphql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: `mutation { createWorkOrder(workOrderId: "${workOrderId}", type: "${order.type}", description: "${order.description.replace(/"/g, '\\"')}", assignedTo: "${order.assignedTo || ''}", towerId: "${order.towerId || ''}") { id workOrderId type description assignedTo status createdAt } }` }),
+      });
+      const { data } = await res.json();
+      if (data?.createWorkOrder) {
+        const wo = data.createWorkOrder;
+        setWorkOrders(prev => [{ id: wo.workOrderId, type: wo.type, description: wo.description, assignedTo: wo.assignedTo, status: wo.status as 'open', createdAt: new Date(wo.createdAt).getTime() }, ...prev]);
+        addLog(`🎟 Work Order issued: ${order.type}`, 'warning');
+        return;
+      }
+    } catch (e) {
+      console.error('Failed to persist work order:', e);
+    }
+    // Fallback to local state
     const newOrder: WorkOrder = {
       ...order,
-      id: `WO-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+      id: workOrderId,
       createdAt: Date.now(),
     };
     setWorkOrders(prev => [newOrder, ...prev]);
     addLog(`🎟 Work Order issued: ${order.type}`, 'warning');
   }, [addLog]);
 
-  const completeWorkOrder = useCallback((id: string) => {
+  const completeWorkOrder = useCallback(async (id: string) => {
     setWorkOrders(prev => prev.map(o => o.id === id ? { ...o, status: 'completed' } : o));
-    addLog(`✅ Work Order ${id} completed by field technician`, 'success');
+    addLog(`✅ Work Order ${id} completed by field technician. Awaiting Uma review.`, 'success');
     
-    // Clear the disease condition so the UI fades back to healthy plant visual
-    setTowerConditions(prev => prev.map(tc => {
-      if (tc.disease) {
-        addLog(`Condition ${tc.disease.name} manually resolved.`, 'info');
-      }
-      return { ...tc, disease: null, injectedAt: null };
-    }));
-
     // Trigger Uma to review the resolution
     if (umaActiveRef.current) {
-      queueAnomalyForUma('resolution', `Work order ${id} has been fully completed by the technician. Please review the updated sensor array to confirm biological conditions are restored and announce the situation is under control.`);
+      queueAnomalyForUma('resolution', `Work order ${id} has been marked complete by the technician. You will review their completion notes on your next CRON check.`);
     }
   }, [addLog, queueAnomalyForUma]);
 
@@ -805,8 +977,9 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
   const value: SimulationContextType = {
     reservoir, ambient, rowZones, humidityZones, systemActuators,
     umaActive, umaState, toggleUma, voiceEnabled, setVoiceEnabled,
+    umaLanguage, setUmaLanguage,
     logs, bottlenecks, cascadeActive, activeInterventions,
-    towerConditions, selectedTower, setSelectedTower, injectDisease,
+    towerConditions, selectedTower, setSelectedTower, injectDisease, fusedDiseaseImage, setFusedDiseaseImage,
     teamWorkers, workOrders, addWorker, issueWorkOrder, completeWorkOrder,
     perturbReservoir, perturbAmbient, perturbRow,
     toggleRowValve, toggleZoneHumidifier, toggleZoneDehumidifier,

@@ -7,12 +7,22 @@ import { NextResponse } from 'next/server';
    exceeds its operational range. Uma receives the full sensor
    snapshot including per-row and humidity zone data, reasons
    about the best corrective strategy, and returns structured
-   actions for all actuators.
+   actions for all actuators. Supports vision input for disease
+   diagnosis and tool calls for work order dispatch.
    ══════════════════════════════════════════════════════════════ */
 
-const MONITOR_INSTRUCTIONS = `You are Uma, an expert AI agricultural intelligence managing an advanced vertical hydroponic farm's control systems in real-time.
+function buildMonitorInstructions(teamWorkers: any[]): string {
+  let teamSection: string;
+  if (teamWorkers.length > 0) {
+    const roster = teamWorkers.map((w: any) => `- ${w.name} (${w.role}, ${w.email})`).join('\n');
+    teamSection = `KEY PERSONNEL:\n${roster}\n\nWhen a condition requires physical human intervention (disease treatment, manual inspection, equipment repair, biological pest control), you MUST issue a work order by calling the issue_work_order tool and assigning it to the most appropriate team member based on their role and expertise.`;
+  } else {
+    teamSection = `KEY PERSONNEL:\nNo team members currently registered. If human intervention is needed, note it in your analysis but do not attempt to issue work orders.`;
+  }
 
-You have just been alerted to a sensor anomaly or plant disease. You will receive the full sensor state snapshot across all zones and context about what triggered the alert.
+  return `You are Uma, an expert AI agricultural intelligence managing an advanced vertical hydroponic farm's control systems in real-time.
+
+You have just been alerted to a sensor anomaly or plant disease. You will receive the full sensor state snapshot across all zones and context about what triggered the alert. If a side-by-side comparison image of a healthy vs diseased plant is provided, use it to visually confirm the diagnosis and assess severity.
 
 FARM LAYOUT — 5 ZipGrow Towers:
 - Tower T1: Butterhead Lettuce (pH 5.5–6.5, EC 0.8–1.2, RH 60–70%)  → Humidity Zone A
@@ -20,6 +30,8 @@ FARM LAYOUT — 5 ZipGrow Towers:
 - Tower T3: Cherry Tomatoes (pH 5.8–6.3, EC 2.0–3.5, RH 60–75%)    → Humidity Zone B
 - Tower T4: Tuscan Kale (pH 5.5–6.5, EC 1.5–2.5, RH 55–70%)       → Humidity Zone B
 - Tower T5: Strawberries (pH 5.5–6.2, EC 1.0–1.5, RH 60–70%)      → Humidity Zone B
+
+${teamSection}
 
 SENSOR ARCHITECTURE (22 SENSORS):
 System Level (7):
@@ -55,12 +67,12 @@ OPERATIONAL RANGES (equilibrium → acceptable range):
 - PAR Intensity: 450 µmol (300–550 µmol)
 
 DISEASE MANAGEMENT PROTOCOLS:
-- Pythium Root Rot: Reduce water temp <22°C, increase O₂, add H₂O₂ at 3mL/L, increase flow
-- Powdery Mildew: Reduce zone humidity via dehumidifier, increase airflow, reduce PAR
-- Botrytis Gray Mold: Lower zone humidity <65%, increase ventilation, potassium bicarbonate spray
-- Calcium Tipburn: Reduce EC, slow growth, increase airflow around affected row
-- Fusarium Wilt: Sterilize reservoir with UV/ozone, lower water temp, flush system
-- Aphid Infestation: Neem oil foliar, reduce zone humidity to discourage reproduction
+- Pythium Root Rot: Reduce water temp <22°C, increase O₂, add H₂O₂ at 3mL/L, increase flow. Requires physical root zone inspection.
+- Powdery Mildew: Reduce zone humidity via dehumidifier, increase airflow, reduce PAR. Requires foliar treatment application.
+- Botrytis Gray Mold: Lower zone humidity <65%, increase ventilation, potassium bicarbonate spray. Requires manual infected tissue removal.
+- Calcium Tipburn: Reduce EC, slow growth, increase airflow around affected row. Requires physical leaf inspection.
+- Fusarium Wilt: Sterilize reservoir with UV/ozone, lower water temp, flush system. Requires reservoir sterilization procedure.
+- Aphid Infestation: Neem oil foliar, reduce zone humidity. Requires beneficial insect deployment or manual pesticide application.
 
 INTERVENTION PHILOSOPHY:
 1. ALWAYS try the least invasive approach first (airflow before chemicals)
@@ -74,6 +86,7 @@ INTERVENTION PHILOSOPHY:
 9. Be specific about what actuator you're engaging and why
 10. If multiple sensors are out of range, address the root cause first
 11. Be concise but authoritative — you are a precision instrument
+12. ALWAYS issue a work order for conditions requiring human intervention using the issue_work_order tool, selecting the best-fit team member by role
 
 Respond with a JSON object:
 {
@@ -87,10 +100,44 @@ Respond with a JSON object:
   ],
   "narration": "A natural spoken sentence for voice output (what you'd say out loud to the farm operator)"
 }`;
+}
+
+const WORK_ORDER_TOOL = {
+  type: 'function' as const,
+  name: 'issue_work_order',
+  description: 'Create and dispatch a work order to a farm team member for physical intervention. This sends an email notification to the assigned worker.',
+  parameters: {
+    type: 'object',
+    properties: {
+      type: {
+        type: 'string',
+        description: 'Category of work order (e.g., "Disease Treatment", "Equipment Repair", "Crop Inspection", "Pest Control", "Reservoir Maintenance")',
+      },
+      description: {
+        type: 'string',
+        description: 'Detailed description of the work to be performed, including location (tower ID), condition details, and specific instructions',
+      },
+      assignedTo: {
+        type: 'string',
+        description: 'Full name of the team member to assign from the KEY PERSONNEL list provided',
+      },
+      assignedEmail: {
+        type: 'string',
+        description: 'Email address of the assigned team member',
+      },
+      priority: {
+        type: 'string',
+        enum: ['low', 'medium', 'high', 'critical'],
+        description: 'Priority level based on severity and urgency',
+      },
+    },
+    required: ['type', 'description', 'assignedTo', 'assignedEmail', 'priority'],
+  },
+};
 
 export async function POST(req: Request) {
   try {
-    const { sensorState, triggeredSensor } = await req.json();
+    const { sensorState, triggeredSensor, imageBase64 } = await req.json();
 
     // Build comprehensive sensor readout
     const lines: string[] = [
@@ -141,12 +188,36 @@ export async function POST(req: Request) {
         }
       }
     }
+    // Team workers available for work orders
+    if (sensorState.teamWorkers && Array.isArray(sensorState.teamWorkers) && sensorState.teamWorkers.length > 0) {
+      lines.push('', 'AVAILABLE TEAM MEMBERS:');
+      for (const w of sensorState.teamWorkers) {
+        lines.push(`  - ${w.name} (${w.role}, ${w.email})`);
+      }
+    }
 
-    lines.push('', 'Analyze the situation and provide your corrective intervention.');
+    lines.push('', 'Analyze the situation and provide your corrective intervention. If human intervention is required and team members are available, issue a work order using the issue_work_order tool.');
 
     const userMessage = lines.join('\n');
 
-    const response = await fetch(process.env.AZURE_OPENAI_ENDPOINT!, {
+    // Build instructions with dynamic team roster
+    const teamWorkers = sensorState.teamWorkers || [];
+    const instructions = buildMonitorInstructions(teamWorkers);
+
+    // Build content array — text + optional image
+    const contentParts: any[] = [
+      { type: 'input_text', text: userMessage },
+    ];
+
+    if (imageBase64) {
+      contentParts.push({
+        type: 'input_image',
+        image_url: imageBase64,
+      });
+    }
+
+    // Initial API call
+    let response = await fetch(process.env.AZURE_OPENAI_ENDPOINT!, {
       method: 'POST',
       headers: {
         'api-key': process.env.AZURE_OPENAI_KEY!,
@@ -154,9 +225,10 @@ export async function POST(req: Request) {
       },
       body: JSON.stringify({
         model: 'gpt-5.4-mini',
-        instructions: MONITOR_INSTRUCTIONS,
+        instructions,
+        ...(teamWorkers.length > 0 ? { tools: [WORK_ORDER_TOOL] } : {}),
         input: [
-          { type: 'message', role: 'user', content: userMessage },
+          { type: 'message', role: 'user', content: contentParts },
         ],
       }),
     });
@@ -167,9 +239,93 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Uma monitoring failed' }, { status: response.status });
     }
 
-    const data = await response.json();
-    const output = data.output || [];
-    const messageItems = output.filter((item: any) => item.type === 'message');
+    let data = await response.json();
+    
+    // Tool call loop (up to 3 iterations)
+    const issuedWorkOrders: any[] = [];
+    let iterations = 0;
+
+    while (iterations < 3) {
+      const output = data.output || [];
+      const toolCalls = output.filter((item: any) => item.type === 'function_call');
+      
+      if (toolCalls.length === 0) break;
+      iterations++;
+
+      // Process each tool call
+      const toolResults: any[] = [];
+      for (const tc of toolCalls) {
+        if (tc.name === 'issue_work_order') {
+          let args;
+          try {
+            args = typeof tc.arguments === 'string' ? JSON.parse(tc.arguments) : tc.arguments;
+          } catch {
+            args = {};
+          }
+
+          const orderId = `WO-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+          
+          // Dispatch email via work order API
+          try {
+            await fetch(new URL('/api/workorder', process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000').toString(), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                orderId,
+                type: args.type,
+                description: args.description,
+                assignedTo: args.assignedTo,
+                assignedEmail: args.assignedEmail,
+                priority: args.priority,
+              }),
+            });
+          } catch (emailErr) {
+            console.error('Work order dispatch failed:', emailErr);
+          }
+
+          issuedWorkOrders.push({
+            type: args.type || 'General',
+            description: args.description || 'Work order issued',
+            assignedTo: args.assignedTo || 'Unassigned',
+            priority: args.priority || 'medium',
+          });
+
+          toolResults.push({
+            type: 'function_call_output',
+            call_id: tc.call_id,
+            output: JSON.stringify({ success: true, orderId, message: `Work order ${orderId} created and email notification dispatched to ${args.assignedEmail}` }),
+          });
+        }
+      }
+
+      if (toolResults.length === 0) break;
+
+      // Continue conversation with tool results
+      response = await fetch(process.env.AZURE_OPENAI_ENDPOINT!, {
+        method: 'POST',
+        headers: {
+          'api-key': process.env.AZURE_OPENAI_KEY!,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-5.4-mini',
+          instructions,
+          tools: teamWorkers.length > 0 ? [WORK_ORDER_TOOL] : [],
+          input: [
+            { type: 'message', role: 'user', content: contentParts },
+            ...output,
+            ...toolResults,
+          ],
+        }),
+      });
+
+      if (!response.ok) break;
+      data = await response.json();
+    }
+
+    // Extract final message
+    const finalOutput = data.output || [];
+    const messageItems = finalOutput.filter((item: any) => item.type === 'message');
 
     let responseText = '';
     if (messageItems.length > 0) {
@@ -193,6 +349,11 @@ export async function POST(req: Request) {
         actions: [],
         narration: responseText.slice(0, 200),
       };
+    }
+
+    // Attach issued work orders
+    if (issuedWorkOrders.length > 0) {
+      parsed.issuedWorkOrders = issuedWorkOrders;
     }
 
     return NextResponse.json(parsed);
